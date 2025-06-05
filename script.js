@@ -376,7 +376,7 @@ const LOCAL_STORAGE_KEY_SENDADDRESSBUTTON = 'whatsappMsg_sendAddressButton';
 }
 
 /* Pré-visualização de imagens */
-#imagePreviews, 
+#imagePreviews,
 #reviveImagePreviews {
     display: flex;
     flex-wrap: wrap;
@@ -664,8 +664,8 @@ const LOCAL_STORAGE_KEY_SENDADDRESSBUTTON = 'whatsappMsg_sendAddressButton';
 }
     `;
 
-  
-  
+
+
     // --- HTML dos Botões e do Modal ---
     const buttonsHtml = `
         <button id="configureMenuButton" class="float-button">⚙️</button>
@@ -697,7 +697,7 @@ const LOCAL_STORAGE_KEY_SENDADDRESSBUTTON = 'whatsappMsg_sendAddressButton';
                 <button class="tab-button" data-tab="pix">PIX/Pagamento</button>
                 <button class="tab-button" data-tab="wait">Tempos</button>
                 <button class="tab-button" data-tab="revive">Reanimar</button>
-            
+
             <div id="mensagensTab" class="tab-content active">
     <h4>Configuração de Mensagens Rápidas</h4>
     <p class="description-text">Edite o conteúdo das mensagens que serão enviadas pelos botões rápidos. Personalize cada campo para agilizar sua comunicação!</p>
@@ -1401,7 +1401,7 @@ function save_sendAddressButton(text) {
             statusMessageDiv.textContent = ''; // Limpa qualquer mensagem de status anterior
         };
 
-        
+
         const pedidoSaiuButtonInput = document.getElementById('pedidoSaiuButtonInput');
         pedidoSaiuButtonInput.value = stored_pedidoSaiuButton;
         pedidoSaiuButtonInput.oninput = () => {
@@ -1595,7 +1595,10 @@ function save_sendAddressButton(text) {
 
         // Configura o botão de toggle
         if (toggleScriptButton) {
-            toggleScriptButton.onclick = toggleScript;
+            toggleScriptButton.onclick = () => {
+    const modal = document.getElementById('timeConfigModal');
+    modal.style.display = 'block';
+};
         }
 
         // Carregar dados salvos uma vez ao iniciar
@@ -1780,7 +1783,7 @@ function save_sendAddressButton(text) {
             };
         }
 
-        
+
         if (pedidoSaiuButton) {
             pedidoSaiuButton.onclick = async () => {
                 if (!scriptEnabled) return;
@@ -1929,8 +1932,186 @@ function save_sendAddressButton(text) {
     });
 
     document.body.appendChild(div);
-    
-    
+
+
 })();
 })();
+
+
+
+// --- Extensão: Temporizador de botões ---
+
+// Adicionar no topo do script
+const LOCAL_STORAGE_KEY_BUTTON_VISIBILITY_TIME = 'whatsappButtonVisibilityTime';
+let buttonVisibleDuration = parseInt(localStorage.getItem(LOCAL_STORAGE_KEY_BUTTON_VISIBILITY_TIME)) || 5;
+let hideTimeout = null;
+
+// Adicionar ao injectModal()
+function injectTimeConfigModal() {
+    const modal = document.createElement('div');
+    modal.id = 'timeConfigModal';
+    modal.style = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #2a3942;
+        padding: 20px;
+        border-radius: 10px;
+        z-index: 100002;
+        display: none;
+        color: white;
+        width: 300px;
+        box-shadow: 0 0 15px rgba(0,0,0,0.6);
+    `;
+ modal.innerHTML = `
+    <div style="
+        background-color: #202c33;
+        padding: 20px;
+        border-radius: 12px;
+        font-family: 'Segoe UI', sans-serif;
+        color: #f0f0f0;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    ">
+        <h2 style="
+            margin: 0 0 15px;
+            font-size: 20px;
+            text-align: center;
+            color: #00a884;
+        ">
+            ⏱️ Configurar Tempo de Visibilidade
+        </h2>
+
+        <p style="
+            font-size: 14px;
+            margin-bottom: 8px;
+            text-align: center;
+            line-height: 1.5;
+        ">
+            Defina abaixo por quantos segundos os botões devem permanecer visíveis na tela.
+            Após esse tempo, eles desaparecerão automaticamente.<br>
+            Para reexibi-los, basta passar o mouse no canto direito da tela.
+        </p>
+
+        <div style="margin-bottom: 20px;">
+            <label for="buttonTimeInput" style="
+                display: block;
+                font-size: 14px;
+                font-weight: 500;
+                margin-bottom: 6px;
+            ">
+                Tempo em segundos:
+            </label>
+            <input
+                id="buttonTimeInput"
+                type="number"
+                min="1"
+                value="${buttonVisibleDuration}"
+                style="
+                    width: 100%;
+                    padding: 10px;
+                    font-size: 14px;
+                    border-radius: 8px;
+                    border: none;
+                    outline: none;
+                    background-color: #2a3942;
+                    color: #ffffff;
+                    box-sizing: border-box;
+                "
+            >
+        </div>
+
+        <div style="text-align: right;">
+            <button
+                id="saveTimeBtn"
+                style="
+                    padding: 10px 20px;
+                    background: #00a884;
+                    border: none;
+                    border-radius: 8px;
+                    color: white;
+                    font-weight: bold;
+                    font-size: 14px;
+                    cursor: pointer;
+                    transition: background 0.3s, transform 0.2s;
+                "
+                onmouseover="this.style.background='#01976f'"
+                onmouseout="this.style.background='#00a884'"
+                onmousedown="this.style.transform='scale(0.95)'"
+                onmouseup="this.style.transform='scale(1)'"
+            >
+                💾 Salvar
+            </button>
+        </div>
+    </div>
+`;
+
+    document.body.appendChild(modal);
+
+    document.getElementById('saveTimeBtn').onclick = () => {
+        const time = parseInt(document.getElementById('buttonTimeInput').value);
+        if (!isNaN(time) && time > 0) {
+            localStorage.setItem(LOCAL_STORAGE_KEY_BUTTON_VISIBILITY_TIME, time);
+            buttonVisibleDuration = time;
+            modal.style.display = 'none';
+            showButtonsTemporarily();
+        }
+    };
+}
+
+function showButtonsTemporarily() {
+    showAllButtons();
+    if (hideTimeout) clearTimeout(hideTimeout);
+    hideTimeout = setTimeout(() => {
+        hideAllButtons();
+    }, buttonVisibleDuration * 1000);
+}
+
+function showAllButtons() {
+    document.querySelectorAll('.float-button').forEach(btn => {
+        btn.style.display = 'flex';
+    });
+    document.querySelector('.revive-button-container').style.display = 'flex';
+}
+
+function hideAllButtons() {
+    document.querySelectorAll('.float-button').forEach(btn => {
+        if (!['toggleScriptButton', 'configureMenuButton'].includes(btn.id)) {
+            btn.style.display = 'none';
+        }
+    });
+    document.querySelector('.revive-button-container').style.display = 'none';
+}
+
+function setupEdgeHover() {
+    const edgeZone = document.createElement('div');
+    edgeZone.style = `
+        position: fixed;
+        right: 0;
+        top: 0;
+        width: 0.1px;
+        height: 100vh;
+        z-index: 9999;
+    `;
+    edgeZone.addEventListener('mouseenter', () => {
+        showButtonsTemporarily();
+    });
+    document.body.appendChild(edgeZone);
+}
+// Dentro do seu onload principal:
+injectTimeConfigModal();
+setupEdgeHover();
+showButtonsTemporarily();
+// Modificar o toggleScriptButton.onclick dentro de setupButtonListeners()
+// Substituir:
+// toggleScriptButton.onclick = toggleScript;
+// Por:
+
+if (toggleScriptButton) {
+    toggleScriptButton.onclick = () => {
+        const modal = document.getElementById('timeConfigModal');
+        modal.style.display = 'block';
+    };
+}
+
 
