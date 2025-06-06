@@ -2083,7 +2083,7 @@ function hideAllButtons() {
             btn.style.display = 'none';
         }
     });
-    document.querySelector('.revive-button-container').style.display = 'none';
+   
 }
 // Dentro do seu onload principal:
 
