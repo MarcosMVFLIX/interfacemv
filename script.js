@@ -1102,7 +1102,7 @@ function save_sendAddressButton(text) {
 
         // Atualiza o botão de toggle
         toggleButton.className = scriptEnabled ? 'float-button enabled' : 'float-button disabled';
-        toggleButton.textContent = scriptEnabled ? '🔛' : '❌';
+        toggleButton.textContent = scriptEnabled ? '⏱️' : '❌';
 
         // Mostra ou esconde todos os botões exceto configuração e toggle
         const buttonsToToggle = [
@@ -1595,10 +1595,10 @@ function save_sendAddressButton(text) {
 
         // Configura o botão de toggle
         if (toggleScriptButton) {
-            toggleScriptButton.onclick = () => {
-    const modal = document.getElementById('timeConfigModal');
-    modal.style.display = 'block';
-};
+    toggleScriptButton.onclick = () => {
+        const modal = document.getElementById('timeConfigModal');
+        modal.style.display = 'block';
+    };
         }
 
         // Carregar dados salvos uma vez ao iniciar
@@ -1896,6 +1896,9 @@ function save_sendAddressButton(text) {
         injectButtons();
         injectModal();
         setupConfigModal();
+        injectTimeConfigModal();
+        setupEdgeHover();
+        showButtonsTemporarily();
         setupButtonListeners(); // Configura os listeners dos botões principais
         loadSavedData(); // Garante que os dados estejam carregados para a primeira renderização dos botões de tempo
         renderWaitTimeButtons(); // Renderiza os botões de tempo de espera ao carregar
@@ -2082,6 +2085,7 @@ function hideAllButtons() {
     });
     document.querySelector('.revive-button-container').style.display = 'none';
 }
+// Dentro do seu onload principal:
 
 function setupEdgeHover() {
     const edgeZone = document.createElement('div');
@@ -2098,20 +2102,7 @@ function setupEdgeHover() {
     });
     document.body.appendChild(edgeZone);
 }
-// Dentro do seu onload principal:
-injectTimeConfigModal();
-setupEdgeHover();
-showButtonsTemporarily();
-// Modificar o toggleScriptButton.onclick dentro de setupButtonListeners()
-// Substituir:
-// toggleScriptButton.onclick = toggleScript;
-// Por:
 
-if (toggleScriptButton) {
-    toggleScriptButton.onclick = () => {
-        const modal = document.getElementById('timeConfigModal');
-        modal.style.display = 'block';
-    };
-}
+
 
 
