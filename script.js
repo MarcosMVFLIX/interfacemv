@@ -673,7 +673,7 @@ const LOCAL_STORAGE_KEY_SENDADDRESSBUTTON = 'whatsappMsg_sendAddressButton';
         <div id="waitTimesContainer"></div>
         <div class="revive-button-container">
             <span class="revive-button-label">Reanimar Cliente</span>
-            <button id="reviveClientButton" class="revive-button">🕺</button>
+            <button id="reviveClientButton" class="revive-button">🚨</button>
         </div>
         <button id="sendAddressButton" class="float-button">🏡 Endereço</button>
         <button id="sendOrderConfirmedButton" class="float-button">📝 Pedido Anotado</button>
