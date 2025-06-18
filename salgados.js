@@ -727,14 +727,14 @@ titleInput.oninput = (e) => {
             position: fixed;
             bottom: 20px;
             right: 20px;
-            width: 50px;
-            height: 50px;
+            width: 60px;
+            height: 60px;
             background-color: #25D366;
             border: none;
             border-radius: 50%;
             box-shadow: 0 4px 8px rgba(0,0,0,0.3);
             cursor: pointer;
-            z-index: 999999;
+            z-index: 2147483647;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -762,8 +762,7 @@ titleInput.oninput = (e) => {
                 message += \`
 
 *Itens indisponíveis no momento:*
-\`;
-                message += inativosLista;
+\` + inativosLista;
             }
             if (activeMenu.footer) message += \`
 
@@ -785,10 +784,8 @@ titleInput.oninput = (e) => {
                     });
                     messageInput.dispatchEvent(pasteEvent);
                 } catch (e) {
-                    console.error("Erro ao simular colagem:", e);
                     messageInput.innerText = message;
                     messageInput.dispatchEvent(new Event('input', { bubbles: true }));
-                    messageInput.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: ' ', code: 'Space', charCode: 32, keyCode: 32 }));
                 }
 
                 setTimeout(() => {
@@ -810,16 +807,11 @@ titleInput.oninput = (e) => {
         document.body.appendChild(floatButton);
     }
 
-    let checkInterval = null;
-    function startChecking() {
-        if (checkInterval) clearInterval(checkInterval);
-        checkInterval = setInterval(() => {
-            if (!document.getElementById('dynamic-menu-main-button-whatsapp')) {
-                addMainButton();
-            }
-        }, 1000);
+    if (document.readyState === 'complete') {
+        setTimeout(addMainButton, 1500);
+    } else {
+        window.addEventListener('load', () => setTimeout(addMainButton, 1500));
     }
-    startChecking();
-    
+
 
 })();
