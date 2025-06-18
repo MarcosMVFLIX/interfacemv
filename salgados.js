@@ -715,210 +715,102 @@ titleInput.oninput = (e) => {
     }
 
     // Função para adicionar o botão principal
+    
     function addMainButton() {
-        // Usa o seletor da div fornecida para encontrar o local de inserção
-        const targetDiv = document.querySelector('div.x9f619.x78zum5.x6s0dn4.xl56j7k.x1ofbdpd._ak1m');
+        if (document.getElementById('dynamic-menu-main-button-whatsapp')) return;
 
-        if (targetDiv && !document.getElementById('dynamic-menu-main-button-whatsapp')) {
-            // Encontra o segundo span dentro da targetDiv que é o local correto para inserir o botão.
-            const attachButtonContainer = targetDiv.querySelector('div.x100vrsf.x1vqgdyp.x78zum5.x6s0dn4');
-            const secondSpan = attachButtonContainer ? attachButtonContainer.querySelector('span:last-child') : null;
+        const floatButton = document.createElement('button');
+        floatButton.id = 'dynamic-menu-main-button-whatsapp';
+        floatButton.setAttribute('aria-label', 'Botão Menu Dinâmico');
+        floatButton.innerHTML = `<span data-icon="dynamic-menu-custom">${SALGADO_SVG}</span>`;
+        floatButton.style.cssText = \`
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            background-color: #25D366;
+            border: none;
+            border-radius: 50%;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            cursor: pointer;
+            z-index: 999999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        \`;
 
-            if (secondSpan) {
-                const mainButton = document.createElement('button');
-                mainButton.id = 'dynamic-menu-main-button-whatsapp';
-                mainButton.setAttribute('tabindex', '0');
-                mainButton.setAttribute('type', 'button');
-                mainButton.setAttribute('aria-label', 'Botão Menu Dinâmico');
-                mainButton.className = 'xjb2p0i xk390pu x1ypdohk xjbqb8w x972fbf xcfux6l x1qhh985 xm0m39n x1o1ewxj x3x9cwd x1e5q0jg x13rtm0m xexx8yu x4uap5 x18d9i69 xkhd6sd xfect85 xtnn1bt x9v5kkp xmw7ebm xrdum7p';
-                mainButton.style.marginRight = '13px';
+        floatButton.onclick = async () => {
+            const activeMenu = getMenuById(menusData.activeMenuId);
 
-                const spanIcon = document.createElement('span');
-                spanIcon.setAttribute('aria-hidden', 'true');
-                spanIcon.setAttribute('data-icon', 'dynamic-menu-custom');
-                spanIcon.className = '';
-                spanIcon.innerHTML = SALGADO_SVG; // Ícone padrão para o botão
-
-                mainButton.appendChild(spanIcon);
-
-                // --- Evento de CLIQUE ESQUERDO ---
-                mainButton.onclick = async () => {
-                    const activeMenu = getMenuById(menusData.activeMenuId);
-
-                    if (!activeMenu || activeMenu.items.length === 0) {
-                        openInstructionsModal();
-                        return;
-                    }
-
-                    const ativosLista = activeMenu.items.filter(s => s.active).map(s => s.name).join('\n');
-                    const inativosLista = activeMenu.items.filter(s => !s.active).map(s => s.name).join('\n');
-
-                    let message = '';
-                    if (activeMenu.title) {
-                        message += `${activeMenu.title}\n\n`;
-                    }
-
-                    message += ativosLista ? ativosLista : "Nenhum item disponível no momento.";
-
-                    if (inativosLista && inativosLista.trim() !== '') { // Só adiciona se houver itens indisponíveis
-                        message += `\n\n*Itens indisponíveis no momento:*\n`;
-                        message += inativosLista;
-                    }
-
-                    if (activeMenu.footer) {
-                        message += `\n\n${activeMenu.footer}`;
-                    }
-
-                    const messageInput = document.querySelector('div.x1hx0egp.x6ikm8r.x1odjw0f.x1k6rcq7.x6prxxf[contenteditable="true"][data-tab="10"]');
-
-                    if (messageInput) {
-                        messageInput.focus();
-                        try {
-                            messageInput.innerHTML = '<p><br></p>';
-                            const dataTransfer = new DataTransfer();
-                            dataTransfer.setData('text/plain', message);
-                            const pasteEvent = new ClipboardEvent('paste', {
-                                bubbles: true,
-                                cancelable: true,
-                                dataType: 'text/plain',
-                                data: message,
-                                clipboardData: dataTransfer
-                            });
-                            messageInput.dispatchEvent(pasteEvent);
-                        } catch (e) {
-                            console.error("Erro ao simular colagem, tentando método alternativo:", e);
-                            messageInput.innerText = message;
-                            const inputEvent = new Event('input', { bubbles: true });
-                            messageInput.dispatchEvent(inputEvent);
-                            const keyupEvent = new KeyboardEvent('keyup', {
-                                bubbles: true,
-                                key: ' ',
-                                code: 'Space',
-                                charCode: 32,
-                                keyCode: 32,
-                            });
-                            messageInput.dispatchEvent(keyupEvent);
-                        }
-
-                        setTimeout(() => {
-                            const sendButton = document.querySelector('button[aria-label="Enviar"]');
-                            if (sendButton) {
-                                sendButton.click();
-                                console.log('Mensagem enviada e botão "Enviar" clicado.');
-                            } else {
-                                console.log('Botão "Enviar" não encontrado após preencher a mensagem.');
-                            }
-                        }, 200);
-                    } else {
-                        alert('Não foi possível encontrar o campo de mensagem. Mensagem gerada:\n\n' + message);
-                    }
-                };
-
-                // --- Evento de CLIQUE DIREITO ---
-                mainButton.oncontextmenu = (e) => {
-                    e.preventDefault();
-
-                    const currentIcon = mainButton.querySelector('span[data-icon]');
-                    if (currentIcon) {
-                        currentIcon.innerHTML = LIST_SVG; // Muda para o ícone de lista temporariamente
-                        currentIcon.setAttribute('data-icon', 'list-custom');
-                    }
-
-                    const oldConfigButton = document.getElementById('config-button-whatsapp');
-                    if (oldConfigButton) oldConfigButton.remove();
-
-                    const mainButtonRect = mainButton.getBoundingClientRect();
-
-                    const configButton = document.createElement('button');
-                    configButton.id = 'config-button-whatsapp';
-                    configButton.textContent = 'Configurações';
-                    configButton.style.cssText = `
-                        background-color: #007bff;
-                        color: white;
-                        border: none;
-                        border-radius: 20px;
-                        padding: 8px 12px;
-                        cursor: pointer;
-                        font-size: 14px;
-                        font-weight: bold;
-                        position: fixed;
-                        top: ${mainButtonRect.top}px;
-                        left: ${mainButtonRect.right + 10}px;
-                        z-index: 99999998;
-                        transition: background-color 0.2s ease;
-                        white-space: nowrap;
-                    `;
-                    configButton.onmouseover = () => configButton.style.backgroundColor = '#0056b3';
-                    configButton.onmouseout = () => configButton.style.backgroundColor = '#007bff';
-                    configButton.onclick = () => {
-                        openMainSettingsModal(); // Abre o modal principal de configurações
-                        configButton.remove();
-                        const mainButtonIcon = mainButton.querySelector('span[data-icon]');
-                        if (mainButtonIcon) {
-                            mainButtonIcon.innerHTML = SALGADO_SVG; // Volta para o ícone original
-                            mainButtonIcon.setAttribute('data-icon', 'dynamic-menu-custom');
-                        }
-                    };
-
-                    document.body.appendChild(configButton);
-
-                    let hideTimeout;
-
-                    const resetState = () => {
-                        clearTimeout(hideTimeout);
-                        if (configButton.parentNode) {
-                            configButton.remove();
-                            const mainButtonIcon = mainButton.querySelector('span[data-icon]');
-                            if (mainButtonIcon) {
-                                mainButtonIcon.innerHTML = SALGADO_SVG;
-                                mainButtonIcon.setAttribute('data-icon', 'dynamic-menu-custom');
-                            }
-                        }
-                        document.removeEventListener('mousedown', handleGlobalClick);
-                    };
-
-                    const startHideTimeout = () => {
-                        clearTimeout(hideTimeout);
-                        hideTimeout = setTimeout(resetState, 7000); // 7 segundos
-                    };
-
-                    configButton.onmouseenter = () => clearTimeout(hideTimeout);
-                    configButton.onmouseleave = startHideTimeout;
-
-                    mainButton.onmouseenter = () => clearTimeout(hideTimeout);
-                    mainButton.onmouseleave = startHideTimeout;
-
-                    const handleGlobalClick = (event) => {
-                        const isClickInsideMainButton = mainButton.contains(event.target);
-                        const isClickInsideConfigButton = configButton.contains(event.target);
-                        const isClickInsideModal = document.getElementById('main-settings-modal')?.contains(event.target) ||
-                                                   document.getElementById('menu-editor-modal')?.contains(event.target) ||
-                                                   document.getElementById('menu-instructions-modal')?.contains(event.target);
-
-                        if (!isClickInsideMainButton && !isClickInsideConfigButton && !isClickInsideModal) {
-                            resetState();
-                        }
-                    };
-
-                    document.addEventListener('mousedown', handleGlobalClick);
-
-                    startHideTimeout();
-                };
-
-                secondSpan.insertAdjacentElement('afterend', mainButton);
-                console.log('Botão "Menu Dinâmico" principal adicionado ao WhatsApp Web na div correta.');
-            } else {
-                console.log('Não foi possível encontrar o span de referência dentro do contêiner de anexar.');
+            if (!activeMenu || activeMenu.items.length === 0) {
+                openInstructionsModal();
+                return;
             }
-        } else if (document.getElementById('dynamic-menu-main-button-whatsapp')) {
-            // console.log('Botão "Menu Dinâmico" principal já existe.');
-        } else {
-            console.log('Não foi possível encontrar a div alvo para o botão de menu.');
-        }
+
+            const ativosLista = activeMenu.items.filter(s => s.active).map(s => s.name).join('
+');
+            const inativosLista = activeMenu.items.filter(s => !s.active).map(s => s.name).join('
+');
+
+            let message = '';
+            if (activeMenu.title) message += \`\${activeMenu.title}
+
+\`;
+            message += ativosLista ? ativosLista : "Nenhum item disponível no momento.";
+            if (inativosLista && inativosLista.trim() !== '') {
+                message += \`
+
+*Itens indisponíveis no momento:*
+\`;
+                message += inativosLista;
+            }
+            if (activeMenu.footer) message += \`
+
+\${activeMenu.footer}\`;
+
+            const messageInput = document.querySelector('div[contenteditable="true"][data-tab="10"]');
+            if (messageInput) {
+                messageInput.focus();
+                try {
+                    messageInput.innerHTML = '<p><br></p>';
+                    const dataTransfer = new DataTransfer();
+                    dataTransfer.setData('text/plain', message);
+                    const pasteEvent = new ClipboardEvent('paste', {
+                        bubbles: true,
+                        cancelable: true,
+                        dataType: 'text/plain',
+                        data: message,
+                        clipboardData: dataTransfer
+                    });
+                    messageInput.dispatchEvent(pasteEvent);
+                } catch (e) {
+                    console.error("Erro ao simular colagem:", e);
+                    messageInput.innerText = message;
+                    messageInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    messageInput.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: ' ', code: 'Space', charCode: 32, keyCode: 32 }));
+                }
+
+                setTimeout(() => {
+                    const sendButton = document.querySelector('button[aria-label="Enviar"]');
+                    if (sendButton) sendButton.click();
+                }, 200);
+            } else {
+                alert('Campo de mensagem não encontrado.
+
+' + message);
+            }
+        };
+
+        floatButton.oncontextmenu = (e) => {
+            e.preventDefault();
+            openMainSettingsModal();
+        };
+
+        document.body.appendChild(floatButton);
     }
 
     let checkInterval = null;
-
     function startChecking() {
         if (checkInterval) clearInterval(checkInterval);
         checkInterval = setInterval(() => {
@@ -927,7 +819,7 @@ titleInput.oninput = (e) => {
             }
         }, 1000);
     }
-
     startChecking();
+    
 
 })();
