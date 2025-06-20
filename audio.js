@@ -30,7 +30,7 @@
 
 
 
-    const MESSAGE_TO_SEND = "Olá! Não consigo ouvir áudios no momento. Por favor, envie sua mensagem por texto.";
+    const MESSAGE_TO_SEND = "🔇 *Olá! Não consigo ouvir áudios no momento.* Por favor, envie sua mensagem por texto.";
 
 
 
@@ -74,7 +74,7 @@
 
         await new Promise(r => setTimeout(r, 300));
 
-        const sendButton = document.querySelector('#main [data-testid="send"], [data-icon="send"]');
+        const sendButton = document.querySelector('#main [aria-label="Enviar"]');
 
         if (sendButton) {
 
