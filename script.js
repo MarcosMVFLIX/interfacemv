@@ -834,8 +834,9 @@ Gentileza encaminhar o comprovante."></textarea>
     async function sendMessageToCurrentChat(message) {
         try {
             const mainPane = await waitForElement("#main", 10000);
-            let textarea = mainPane.querySelector(`div[contenteditable="true"][role="textbox"]`);
-            if (!textarea) textarea = mainPane.querySelector(`div[contenteditable="true"]`);
+            let textarea = mainPane.querySelector(`div[contenteditable="true"].selectable-text`);
+if (!textarea) textarea = mainPane.querySelector(`div[contenteditable="true"]`);
+
 
             if (!textarea) throw new Error("Área de texto da conversa não encontrada. Abra uma conversa.");
 
