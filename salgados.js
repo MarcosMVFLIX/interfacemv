@@ -1,13 +1,3 @@
-// ==UserScript==
-// @name          Botão de Menu Dinâmico Flutuante para WhatsApp Web
-// @namespace     http://tampermonkey.net/
-// @version       2.1
-// @description   Adiciona um botão flutuante com menu dinâmico para envio de mensagens no WhatsApp Web.
-// @author        ChatGPT, Gemini e Seu Master Super Top Programador
-// @match         https://web.whatsapp.com/
-// @grant         none
-// ==/UserScript==
-
 (function() {
     'use strict';
 
