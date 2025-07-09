@@ -834,8 +834,13 @@ Gentileza encaminhar o comprovante."></textarea>
     async function sendMessageToCurrentChat(message) {
         try {
             const mainPane = await waitForElement("#main", 10000);
-            let textarea = mainPane.querySelector(`div[contenteditable="true"].selectable-text`);
-if (!textarea) textarea = mainPane.querySelector(`div[contenteditable="true"]`);
+            let textarea = document.querySelector('div[contenteditable="true"][data-tab="10"]');
+if (!textarea) {
+    textarea = document.querySelector('div[contenteditable="true"].selectable-text');
+}
+if (!textarea) {
+    throw new Error("Caixa de mensagem não encontrada. Abra uma conversa.");
+}
 
 
             if (!textarea) throw new Error("Área de texto da conversa não encontrada. Abra uma conversa.");
@@ -891,9 +896,15 @@ if (!textarea) textarea = mainPane.querySelector(`div[contenteditable="true"]`);
     // Função: Cola a imagem Base64 NO CAMPO DE ANEXO E CLICA PARA ENVIAR
     async function pasteAndSendImageBase64(base64Image) {
         try {
-            const mainPane = await waitForElement("#main", 10000);
-            let textarea = mainPane.querySelector(`div[contenteditable="true"][role="textbox"]`);
-            if (!textarea) textarea = mainPane.querySelector(`div[contenteditable="true"]`);
+            const mainPane = await waitForElement("#main", 50000);
+            let textarea = document.querySelector('div[contenteditable="true"][data-tab="10"]');
+if (!textarea) {
+    textarea = document.querySelector('div[contenteditable="true"].selectable-text');
+}
+if (!textarea) {
+    throw new Error("Caixa de mensagem não encontrada. Abra uma conversa.");
+}
+
 
             if (!textarea) throw new Error("Área de texto da conversa não encontrada.");
 
@@ -1916,30 +1927,6 @@ function save_sendAddressButton(text) {
 
     observer.observe(document.body, { childList: true, subtree: true });
 
-  (function() {
-    const div = document.createElement('div');
-    div.textContent = 'Interface WebWhatsapp MV';
-
-    // Estilos para a mensagem
-    Object.assign(div.style, {
-        position: 'fixed',
-        top: '10px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
-        color: '#fff',
-        padding: '4px 8px',
-        fontSize: '12px',
-        borderRadius: '4px',
-        zIndex: '9999',
-        pointerEvents: 'none'
-    });
-
-    document.body.appendChild(div);
-
-
-})();
-})();
 
 
 
@@ -2107,3 +2094,424 @@ function setupEdgeHover() {
 
 
 
+// SISTEMA BACKUP E RESTAURAÇÃO LOCAL STORAGE
+(function() {
+    // Mensagem no topo
+    const topDiv = document.createElement('div');
+    topDiv.textContent = 'Interface WebWhatsapp MV';
+
+    Object.assign(topDiv.style, {
+        position: 'fixed',
+        top: '10px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        color: '#fff',
+        padding: '5px 10px',
+        fontSize: '13px',
+        borderRadius: '5px',
+        zIndex: '9999',
+        pointerEvents: 'none',
+        boxShadow: '0 2px 5px rgba(0,0,0,0.3)'
+    });
+
+    document.body.appendChild(topDiv);
+
+    // ---
+
+    // Mensagem de Boas-Vindas e Instruções
+    const welcomeModal = document.createElement('div');
+    welcomeModal.innerHTML = `
+        <div style="font-size: 24px; font-weight: bold; margin-bottom: 20px; color: #4CAF50;">Bem-vindo à Interface MV!</div>
+        <p style="margin-bottom: 15px; font-size: 15px; line-height: 1.6;">Esta ferramenta te dá **controle total** sobre os dados do seu Banco de Dados. É crucial para **salvar suas configurações** ou **restaurar um estado anterior** da aplicação, evitando perdas inesperadas!</p>
+        <p style="margin-bottom: 10px; font-size: 16px; font-weight: bold;">Use os atalhos mágicos:</p>
+        <ul style="text-align: left; margin-bottom: 20px; padding-left: 25px; list-style-type: '👉 '; /* Ícone divertido */">
+            <li style="margin-bottom: 8px;">
+                <span style="background-color: #5cb85c; color: white; padding: 4px 8px; border-radius: 4px; font-family: 'Consolas', monospace;">Ctrl + Shift + B</span>: Para **Backup** (sempre faça antes de grandes mudanças!)
+            </li>
+            <li>
+                <span style="background-color: #d9534f; color: white; padding: 4px 8px; border-radius: 4px; font-family: 'Consolas', monospace;">Ctrl + Shift + R</span>: Para **Restaurar** (ATENÇÃO! Isso apaga os dados atuais e usa o backup!)
+            </li>
+        </ul>
+        <button id="welcomeModalCloseBtn" style="
+            background-color: #4CAF50;
+            color: #fff;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 5px;
+            font-size: 17px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 25px;
+            box-shadow: 0 4px 10px rgba(0, 170, 0, 0.4);
+        ">Entendi! Bora pro trabalho!</button>
+    `;
+
+    Object.assign(welcomeModal.style, {
+        position: 'fixed',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        backgroundColor: '#2b2b2b',
+        color: '#f0f0f0',
+        padding: '40px',
+        borderRadius: '12px',
+        boxShadow: '0 10px 30px rgba(0,0,0,0.6)',
+        zIndex: '10001',
+        maxWidth: '500px',
+        width: '90%',
+        textAlign: 'center',
+        lineHeight: '1.6',
+        fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+        border: '1px solid #4CAF50'
+    });
+
+    document.body.appendChild(welcomeModal);
+
+    // Efeito hover no botão Entendi!
+    const closeBtn = document.getElementById('welcomeModalCloseBtn');
+    closeBtn.onmouseover = function() {
+        this.style.backgroundColor = '#388E3C';
+        this.style.transform = 'scale(1.05)';
+    };
+    closeBtn.onmouseout = function() {
+        this.style.backgroundColor = '#4CAF50';
+        this.style.transform = 'scale(1)';
+    };
+
+    // Fechar o modal de boas-vindas
+    closeBtn.addEventListener('click', () => {
+        welcomeModal.remove();
+    });
+
+    // ---
+
+    // Funções de Backup e Restauração (mantidas como estão)
+    function backupLocalStorage() {
+        try {
+            const allItems = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                allItems[key] = localStorage.getItem(key);
+            }
+            const backupData = JSON.stringify(allItems);
+
+            const blob = new Blob([backupData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'localStorage_backup_' + new Date().toISOString().slice(0, 10) + '.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            alert('Backup do LocalStorage gerado com sucesso! Verifique seus downloads.');
+
+        } catch (error) {
+            console.error('Erro ao fazer backup do LocalStorage:', error);
+            alert('Erro ao fazer backup do LocalStorage. Verifique o console para detalhes.');
+        }
+    }
+
+    function restoreLocalStorage() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.style.display = 'none';
+
+        input.onchange = function(e) {
+            const file = e.target.files[0];
+            if (!file) {
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const restoredData = JSON.parse(event.target.result);
+
+                    const confirmRestore = confirm(
+                        'Tem certeza que deseja restaurar o LocalStorage? Isso irá apagar os dados atuais e substituí-los pelo backup.'
+                    );
+
+                    if (confirmRestore) {
+                        localStorage.clear();
+                        for (const key in restoredData) {
+                            if (Object.hasOwnProperty.call(restoredData, key)) {
+                                localStorage.setItem(key, restoredData[key]);
+                            }
+                        }
+                        alert('LocalStorage restaurado com sucesso! Pode ser necessário recarregar a página.');
+                    }
+                } catch (error) {
+                    console.error('Erro ao restaurar LocalStorage:', error);
+                    alert('Erro ao restaurar o LocalStorage. Verifique se o arquivo é um JSON válido. Detalhes no console.');
+                }
+            };
+            reader.readAsText(file);
+            document.body.removeChild(input);
+        };
+
+        document.body.appendChild(input);
+        input.click();
+    }
+
+    // ---
+
+    // Adiciona os atalhos de teclado!
+    document.addEventListener('keydown', function(event) {
+        // Atalho para Backup: Ctrl + Shift + B
+        if (event.ctrlKey && event.shiftKey && event.key === 'B') {
+            event.preventDefault();
+            console.log('Atalho Ctrl+Shift+B pressionado - Iniciando Backup do LocalStorage...');
+            backupLocalStorage();
+        }
+
+        // Atalho para Restaurar: Ctrl + Shift + R
+        if (event.ctrlKey && event.shiftKey && event.key === 'R') {
+            event.preventDefault();
+            console.log('Atalho Ctrl+Shift+R pressionado - Iniciando Restauração do LocalStorage...');
+            restoreLocalStorage();
+        }
+        // O atalho para Pix (Ctrl + Shift + P) foi removido.
+    });
+(function () {
+    // --- CHAVE DE ATIVAÇÃO/DESATIVAÇÃO DA BRINCADEIRA ---
+    const enablePrank = false; // Mude para 'false' para desativar a brincadeira do modal.
+    // ---------------------------------------------------
+
+    if (!enablePrank) {
+        // Se a brincadeira estiver desativada, encerra a execução do script aqui.
+        console.log('Brincadeira do modal desativada. Nenhuma ação será executada.');
+        return;
+    }
+
+    
+    // ---
+    
+    // Configurações do modal "fujão"
+    const funnyMessages = [
+        "Se dá trabalho demais, Paulo! 😫 Eu sei que você consegue... ou não! 😂 E os salgados? Já saíram da fritadeira?",
+        "Achou que ia fechar fácil, Mitinga? É mais rápido fazer 100 coxinhas do que fechar isso aqui!",
+        "KKKKKKKK Fecha aí, Mitinga! Fechar isso aqui é mais fácil que fazer salgado. E os hambúrgueres, já estão no ponto?",
+        "HAHAHA! Tentou de novo, Paulo? Tô rindo alto daqui! Cadê os salgados que ninguém vê? A fila da fome tá crescendo!",
+        "Desista, Mitinga! A zoeira não tem fim! 😜 Se fosse pra fechar fácil, não seria divertido, né?",
+        "Você já sabe... dá trabalho demais, Paulo! Mas menos trabalho que entregar os salgados e hambúrgueres atrasados, hein?",
+        "Essa é boa, Mitinga! 😂😂😂 Aposto que o tempo que você tá perdendo aqui dava pra montar uns 50 hambúrgueres!",
+        "O botão de fechar é só pra inglês ver, Paulo! 😉",
+        "Mais uma tentativa falha, Mitinga. 😎 Tá suando aí, né? É o mesmo suor pra fazer salgado ou pro calor da chapa?",
+        "Quase lá! Ou não, Paulo... 😝 Mas não se preocupe, a gente espera os salgados e hambúrgueres, um dia eles chegam!",
+        "Desisto de você, Mitinga!",
+        "Falta pouco, Paulo! Assim como falta pouco para os salgados ficarem prontos... SQN! KKKK E o hambúrguer, já tá com queijo?",
+        "Essa tela é mais insistente que cliente pedindo fiado, Mitinga. E os salgados/hambúrgueres, estão prontos pra vender no fiado? Ou vai fugir igual essa janela?"
+    ];
+
+    let moveCount = 0;
+    const maxMoves = 10;
+    let modalClosed = false;
+
+    // ---
+
+    // Criação do modal
+    const modalContainer = document.createElement('div');
+    Object.assign(modalContainer.style, {
+        position: 'fixed',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        backgroundColor: '#ff4757',
+        color: '#fff',
+        padding: '20px',
+        fontSize: '18px',
+        fontWeight: 'bold',
+        borderRadius: '8px',
+        boxShadow: '0 8px 16px rgba(0,0,0,0.4)',
+        zIndex: '10000',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: '300px',
+        textAlign: 'center'
+    });
+
+    const modalMessage = document.createElement('p');
+    modalMessage.textContent = funnyMessages[0];
+    Object.assign(modalMessage.style, {
+        marginBottom: '15px'
+    });
+    modalContainer.appendChild(modalMessage);
+
+    const closeButton = document.createElement('button');
+    closeButton.textContent = 'Fechar';
+    Object.assign(closeButton.style, {
+        backgroundColor: '#fff',
+        color: '#ff4757',
+        border: 'none',
+        padding: '10px 20px',
+        borderRadius: '5px',
+        cursor: 'pointer',
+        fontSize: '16px',
+        fontWeight: 'bold',
+        transition: 'background-color 0.2s ease',
+        marginTop: '10px'
+    });
+
+    closeButton.onmouseover = function() {
+        this.style.backgroundColor = '#eee';
+    };
+    closeButton.onmouseout = function() {
+        this.style.backgroundColor = '#fff';
+    };
+
+    modalContainer.appendChild(closeButton);
+    document.body.appendChild(modalContainer);
+
+    // ---
+
+    // Função para mover o modal
+    function moveModal() {
+        if (modalClosed) return;
+
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const modalWidth = modalContainer.offsetWidth;
+        const modalHeight = modalContainer.offsetHeight;
+
+        const newX = Math.random() * (viewportWidth - modalWidth);
+        const newY = Math.random() * (viewportHeight - modalHeight);
+
+        Object.assign(modalContainer.style, {
+            left: `${newX}px`,
+            top: `${newY}px`,
+            transform: 'none' // Remove o translate para usar left/top diretamente
+        });
+    }
+
+    // ---
+
+    // Evento de click do botão de fechar
+    closeButton.addEventListener('click', () => {
+        if (modalClosed) return;
+
+        moveCount++;
+        if (moveCount <= maxMoves) {
+            modalMessage.textContent = funnyMessages[moveCount % funnyMessages.length]; // Pega a próxima mensagem
+            moveModal();
+            // Adiciona uma pequena vibração visual para dar a ideia de "fuga"
+            modalContainer.style.transition = 'all 0.1s ease-out';
+            setTimeout(() => {
+                modalContainer.style.transition = 'none';
+            }, 100);
+        } else {
+            modalContainer.remove();
+            modalClosed = true;
+            alert('Até que fim! KKKKKKKKK, forte abraço do MV 🥳'); // Uma mensagem final de alívio
+        }
+    });
+
+    // ---
+    
+    // Inicia a posição do modal
+    moveModal();
+
+})();
+})();
+})();
+
+
+// === FUNÇÕES DE BACKUP E RESTAURAÇÃO ===
+function backupLocalStorage() {
+    const data = {};
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        data[key] = localStorage.getItem(key);
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'mv_backup.json';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function restoreLocalStorageFromFile() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                if (confirm('Tem certeza que deseja restaurar o backup? Isso substituirá suas configurações.')) {
+                    localStorage.clear();
+                    for (const key in data) {
+                        localStorage.setItem(key, data[key]);
+                    }
+                    alert('✅ Backup restaurado com sucesso! Recarregue a página.');
+                }
+            } catch (err) {
+                alert('❌ Erro ao restaurar backup: ' + err.message);
+            }
+        };
+        reader.readAsText(file);
+    };
+    input.click();
+}
+
+// === BOTÕES DE BACKUP NO MODAL DE BOAS-VINDAS ===
+const welcomeCloseBtn = document.getElementById('welcomeModalCloseBtn');
+
+const backupBtn = document.createElement('button');
+backupBtn.textContent = '📤 Fazer Backup';
+backupBtn.style.marginRight = '10px';
+backupBtn.style.padding = '10px 20px';
+backupBtn.style.borderRadius = '5px';
+backupBtn.style.backgroundColor = '#5cb85c';
+backupBtn.style.color = 'white';
+backupBtn.style.fontWeight = 'bold';
+backupBtn.style.cursor = 'pointer';
+backupBtn.onclick = backupLocalStorage;
+
+const restoreBtn = document.createElement('button');
+restoreBtn.textContent = '📥 Restaurar Backup';
+restoreBtn.style.marginRight = '10px';
+restoreBtn.style.padding = '10px 20px';
+restoreBtn.style.borderRadius = '5px';
+restoreBtn.style.backgroundColor = '#d9534f';
+restoreBtn.style.color = 'white';
+restoreBtn.style.fontWeight = 'bold';
+restoreBtn.style.cursor = 'pointer';
+restoreBtn.onclick = restoreLocalStorageFromFile;
+
+welcomeCloseBtn?.parentElement?.insertBefore(backupBtn, welcomeCloseBtn);
+welcomeCloseBtn?.parentElement?.insertBefore(restoreBtn, welcomeCloseBtn);
+
+
+
+// === BACKUP AUTOMÁTICO A CADA 5 SEGUNDOS (APENAS PARA TESTES) ===
+setInterval(() => {
+    const data = {};
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        data[key] = localStorage.getItem(key);
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `mv_backup_auto_${timestamp}.json`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    console.log('📦 Backup automático salvo:', filename);
+}, 21600000); // 5 segundos para testes — depois trocar para 12h (43200000 ms)
