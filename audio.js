@@ -12,7 +12,7 @@
     'use strict';
 
     const RESPONDIDOS_AUDIO_KEY = "msgs_audio_respondidas";
-    const MENSAGEM_AUDIO = "🔇 Olá! Não consigo ouvir áudios no momento. Por favor, envie sua mensagem por texto.";
+    const MENSAGEM_AUDIO = "🔇 Olá! Não consigo ouvir áudios no momento. Por favor, envie sua mensagem por texto. 💬";
 
     function getHistoricoRespondidos() {
         const raw = localStorage.getItem(RESPONDIDOS_AUDIO_KEY);
