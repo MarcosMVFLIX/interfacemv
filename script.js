@@ -2515,3 +2515,82 @@ setInterval(() => {
     URL.revokeObjectURL(url);
     console.log('📦 Backup automático salvo:', filename);
 }, 21600000); // 5 segundos para testes — depois trocar para 12h (43200000 ms)
+
+// --- RESPONDER PIX AUTOMATICO ---
+(function () {
+    'use strict';
+
+    const PALAVRA_CHAVE = "pix";
+    const MENSAGEM1 = "*💳 *Nossa chave PIX é o número de celular abaixo.* Por favor, copie e cole, e envie o comprovante por aqui. Obrigado! 😊*";
+    const RESPONDIDOS_KEY = "msgs_pix_respondidas";
+
+    function getChavePixSalva() {
+        return localStorage.getItem('whatsappPixKey') || '';
+    }
+
+    function getHistoricoRespondidos() {
+        const raw = localStorage.getItem(RESPONDIDOS_KEY);
+        return raw ? JSON.parse(raw) : [];
+    }
+
+    function salvarHistoricoRespondidos(lista) {
+        localStorage.setItem(RESPONDIDOS_KEY, JSON.stringify(lista.slice(-100)));
+    }
+
+    function gerarIdUnico(msgElement) {
+        const texto = msgElement.innerText || "";
+        const timestamp = msgElement.querySelector("span[data-pre-plain-text]")?.getAttribute("data-pre-plain-text") || "";
+        return btoa(texto + timestamp);
+    }
+
+    function enviarMensagem(texto, callback) {
+        const inputBox = document.querySelector('div[contenteditable="true"][data-tab="10"]');
+        if (!inputBox) return;
+
+        inputBox.focus();
+        document.execCommand('insertText', false, texto);
+        inputBox.dispatchEvent(new InputEvent("input", { bubbles: true }));
+
+        setTimeout(() => {
+            const botaoEnviar = document.querySelector('button[data-tab="11"][aria-label="Enviar"]');
+            if (botaoEnviar) {
+                botaoEnviar.click();
+                if (callback) setTimeout(callback, 500);
+            }
+        }, 300);
+    }
+
+    function verificarMensagens() {
+        const mensagens = document.querySelectorAll("div.message-in");
+        const historico = getHistoricoRespondidos();
+
+        mensagens.forEach(msg => {
+            const spans = msg.querySelectorAll("span.selectable-text span");
+            if (!spans.length) return;
+
+            spans.forEach(span => {
+                const texto = span.innerText.toLowerCase();
+                if (texto.includes(PALAVRA_CHAVE)) {
+                    const idMsg = gerarIdUnico(msg);
+                    if (historico.includes(idMsg)) return;
+
+                    historico.push(idMsg);
+                    salvarHistoricoRespondidos(historico);
+
+                    const chavePix = getChavePixSalva();
+                    if (!chavePix) {
+                        console.warn("⚠️ Nenhuma chave Pix configurada no sistema (whatsappPixKey).");
+                        return;
+                    }
+
+                    console.log("🟢 Palavra 'pix' detectada. Enviando resposta automática...");
+                    enviarMensagem(MENSAGEM1, () => {
+                        enviarMensagem(chavePix);
+                    });
+                }
+            });
+        });
+    }
+
+    setInterval(verificarMensagens, 2000);
+})();
