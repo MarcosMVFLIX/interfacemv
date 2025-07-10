@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         WhatsApp AutoResposta Áudio (controle de envio rigoroso)
+// @name         WhatsApp AutoResposta Áudio (controle extra anti-duplicação)
 // @namespace    http://tampermonkey.net/
-// @version      1.7
-// @description  Responde 1x por áudio novo, com controle rigoroso para evitar duplicações.
+// @version      1.9
+// @description  Evita ao máximo envio duplo, com bloqueio global e checagem no DOM.
 // @match        https://web.whatsapp.com/*
 // @grant        none
 // ==/UserScript==
@@ -13,7 +13,8 @@
     const RESPONDIDOS_AUDIO_KEY = "msgs_audio_respondidas_ids";
     const MENSAGEM_AUDIO = "🔇 Olá! Não consigo ouvir áudios no momento. Por favor, envie sua mensagem por texto. 💬";
 
-    // Histórico de IDs de mensagens já respondidas (armazenados no localStorage)
+    let bloqueioEnvioGlobal = false;
+
     function getHistoricoRespondidos() {
         const raw = localStorage.getItem(RESPONDIDOS_AUDIO_KEY);
         return raw ? JSON.parse(raw) : [];
@@ -23,32 +24,12 @@
         localStorage.setItem(RESPONDIDOS_AUDIO_KEY, JSON.stringify(lista.slice(-500)));
     }
 
-    // Gera ID único da mensagem com texto + timestamp
     function gerarIdUnico(msgElement) {
         const texto = msgElement.innerText || "";
         const timestamp = msgElement.querySelector("span[data-pre-plain-text]")?.getAttribute("data-pre-plain-text") || "";
         return btoa(texto + timestamp);
     }
 
-    // Função para enviar mensagem via input do WhatsApp
-    function enviarMensagem(texto, callback) {
-        const inputBox = document.querySelector('div[contenteditable="true"][data-tab="10"]');
-        if (!inputBox) return;
-
-        inputBox.focus();
-        document.execCommand('insertText', false, texto);
-        inputBox.dispatchEvent(new InputEvent("input", { bubbles: true }));
-
-        setTimeout(() => {
-            const botaoEnviar = document.querySelector('button[data-tab="11"][aria-label="Enviar"]');
-            if (botaoEnviar) {
-                botaoEnviar.click();
-                if (callback) setTimeout(callback, 500);
-            }
-        }, 300);
-    }
-
-    // Detecta se a mensagem contém áudio
     function isAudioMessage(msgDiv) {
         const btns = msgDiv.querySelectorAll('button[aria-label]');
         for (const btn of btns) {
@@ -67,11 +48,71 @@
         return false;
     }
 
-    // Estado interno para controlar envios simultâneos: ID da mensagem -> booleano
-    const SESSAO_EM_ANDAMENTO = {};
+    // Função que verifica se a mensagem já foi enviada no DOM do chat (evita duplicação)
+    function mensagemJaEnviada(texto) {
+        // Busca todas mensagens enviadas (message-out)
+        const mensagensEnviadas = Array.from(document.querySelectorAll('div.message-out span.selectable-text'));
+        return mensagensEnviadas.some(span => span.innerText === texto);
+    }
 
-    // Função principal para checar áudio e responder se necessário
-    function verificarUltimaMensagem() {
+    function limparInput() {
+        const inputBox = document.querySelector('div[contenteditable="true"][data-tab="10"]');
+        if (!inputBox) return false;
+
+        inputBox.focus();
+        document.execCommand('selectAll', false, null);
+        document.execCommand('delete');
+        return true;
+    }
+
+    function enviarMensagem(texto) {
+        return new Promise((resolve, reject) => {
+            if (bloqueioEnvioGlobal) {
+                console.log("🚫 Envio bloqueado globalmente para evitar duplicação");
+                reject("envio bloqueado");
+                return;
+            }
+            bloqueioEnvioGlobal = true;
+
+            const inputBox = document.querySelector('div[contenteditable="true"][data-tab="10"]');
+            if (!inputBox) {
+                bloqueioEnvioGlobal = false;
+                reject("inputBox not found");
+                return;
+            }
+
+            if (!limparInput()) {
+                bloqueioEnvioGlobal = false;
+                reject("falha ao limpar input");
+                return;
+            }
+
+            setTimeout(() => {
+                document.execCommand('insertText', false, texto);
+                inputBox.dispatchEvent(new InputEvent("input", { bubbles: true }));
+
+                setTimeout(() => {
+                    const botaoEnviar = document.querySelector('button[data-tab="11"][aria-label="Enviar"]');
+                    if (botaoEnviar) {
+                        botaoEnviar.click();
+
+                        // Aguarda 1.5s para garantir envio e evita envio rápido duplicado
+                        setTimeout(() => {
+                            bloqueioEnvioGlobal = false;
+                            resolve();
+                        }, 1500);
+                    } else {
+                        bloqueioEnvioGlobal = false;
+                        reject("botão enviar não encontrado");
+                    }
+                }, 700);
+            }, 300);
+        });
+    }
+
+    async function verificarUltimaMensagem() {
+        if (bloqueioEnvioGlobal) return; // evita checar se já enviando
+
         const mensagens = Array.from(document.querySelectorAll("div.message-in"));
         if (mensagens.length === 0) return;
 
@@ -82,34 +123,27 @@
         if (!idMsg) return;
 
         const historico = getHistoricoRespondidos();
-
         if (historico.includes(idMsg)) {
-            // Já respondeu essa mensagem
+            return; // já respondeu
+        }
+
+        if (mensagemJaEnviada(MENSAGEM_AUDIO)) {
+            // Mensagem já está no chat, evita enviar duplicado
             return;
         }
 
-        if (SESSAO_EM_ANDAMENTO[idMsg]) {
-            // Já está em processo de envio para essa mensagem
-            return;
-        }
-
-        // Marca que vai enviar para evitar duplicações rápidas
-        SESSAO_EM_ANDAMENTO[idMsg] = true;
-
-        // Registra imediatamente para bloquear reenvio
+        // Marca que vai enviar e salva no histórico para bloquear reenvio
         historico.push(idMsg);
         salvarHistoricoRespondidos(historico);
 
         console.log(`✅ Áudio novo detectado. Respondendo mensagem com ID: ${idMsg}`);
 
-        enviarMensagem(MENSAGEM_AUDIO, () => {
-            // Após enviar, libera o bloqueio após 5 segundos (tempo maior para evitar reenvio)
-            setTimeout(() => {
-                delete SESSAO_EM_ANDAMENTO[idMsg];
-            }, 5000);
-        });
+        try {
+            await enviarMensagem(MENSAGEM_AUDIO);
+        } catch (e) {
+            console.error("Erro no envio:", e);
+        }
     }
 
-    // Intervalo para verificar a cada 2 segundos
     setInterval(verificarUltimaMensagem, 2000);
 })();
