@@ -2522,7 +2522,8 @@ setInterval(() => {
 
     const PALAVRA_CHAVE = "pix";
     const MENSAGEM1 = "*💳 *Nossa chave PIX é o número de celular abaixo.* Por favor, copie e cole, e envie o comprovante por aqui. Obrigado! 😊*";
-    const RESPONDIDOS_KEY = "msgs_pix_respondidas";
+    const RESPONDIDOS_KEY = "msgs_pix_respondidas_ids";
+    const SESSOES_EM_ANDAMENTO = {};
 
     function getChavePixSalva() {
         return localStorage.getItem('whatsappPixKey') || '';
@@ -2534,7 +2535,7 @@ setInterval(() => {
     }
 
     function salvarHistoricoRespondidos(lista) {
-        localStorage.setItem(RESPONDIDOS_KEY, JSON.stringify(lista.slice(-100)));
+        localStorage.setItem(RESPONDIDOS_KEY, JSON.stringify(lista.slice(-500)));
     }
 
     function gerarIdUnico(msgElement) {
@@ -2545,7 +2546,10 @@ setInterval(() => {
 
     function enviarMensagem(texto, callback) {
         const inputBox = document.querySelector('div[contenteditable="true"][data-tab="10"]');
-        if (!inputBox) return;
+        if (!inputBox) {
+            console.warn("🚫 Campo de digitação não encontrado.");
+            return;
+        }
 
         inputBox.focus();
         document.execCommand('insertText', false, texto);
@@ -2556,40 +2560,63 @@ setInterval(() => {
             if (botaoEnviar) {
                 botaoEnviar.click();
                 if (callback) setTimeout(callback, 500);
+            } else {
+                console.warn("🚫 Botão de enviar não encontrado.");
             }
         }, 300);
     }
 
     function verificarMensagens() {
-        const mensagens = document.querySelectorAll("div.message-in");
+        const mensagens = Array.from(document.querySelectorAll("div.message-in")).slice(-3);
+        if (mensagens.length === 0) return;
+
         const historico = getHistoricoRespondidos();
 
-        mensagens.forEach(msg => {
+        for (let msg of mensagens) {
             const spans = msg.querySelectorAll("span.selectable-text span");
-            if (!spans.length) return;
-
-            spans.forEach(span => {
+            for (let span of spans) {
                 const texto = span.innerText.toLowerCase();
                 if (texto.includes(PALAVRA_CHAVE)) {
                     const idMsg = gerarIdUnico(msg);
-                    if (historico.includes(idMsg)) return;
+                    if (!idMsg) continue;
 
-                    historico.push(idMsg);
-                    salvarHistoricoRespondidos(historico);
+                    if (historico.includes(idMsg)) {
+                        // Já respondeu essa mensagem pix
+                        continue;
+                    }
+
+                    if (SESSOES_EM_ANDAMENTO[idMsg]) {
+                        // Já está em processo para essa mensagem
+                        continue;
+                    }
 
                     const chavePix = getChavePixSalva();
                     if (!chavePix) {
-                        console.warn("⚠️ Nenhuma chave Pix configurada no sistema (whatsappPixKey).");
+                        console.warn("⚠️ Nenhuma chave Pix configurada.");
                         return;
                     }
 
-                    console.log("🟢 Palavra 'pix' detectada. Enviando resposta automática...");
+                    // Marca que vai responder para evitar duplicação
+                    SESSOES_EM_ANDAMENTO[idMsg] = true;
+
+                    // Salva imediatamente para evitar respostas múltiplas
+                    historico.push(idMsg);
+                    salvarHistoricoRespondidos(historico);
+
+                    console.log(`✅ Respondendo automaticamente mensagem PIX com ID: ${idMsg}`);
+
                     enviarMensagem(MENSAGEM1, () => {
-                        enviarMensagem(chavePix);
+                        enviarMensagem(chavePix, () => {
+                            setTimeout(() => {
+                                delete SESSOES_EM_ANDAMENTO[idMsg];
+                            }, 3000);
+                        });
                     });
+
+                    return; // Sai após enviar para evitar múltiplos envios na mesma execução
                 }
-            });
-        });
+            }
+        }
     }
 
     setInterval(verificarMensagens, 2000);
