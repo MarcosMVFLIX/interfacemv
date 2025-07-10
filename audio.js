@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         WhatsApp AutoResposta Áudio (controle extra anti-duplicação)
+// @name         WhatsApp AutoResposta Áudio (última mensagem áudio só 1x)
 // @namespace    http://tampermonkey.net/
-// @version      1.9
-// @description  Evita ao máximo envio duplo, com bloqueio global e checagem no DOM.
+// @version      1.11
+// @description  Responde apenas a última mensagem de áudio nova, evita múltiplas respostas.
 // @match        https://web.whatsapp.com/*
 // @grant        none
 // ==/UserScript==
@@ -14,6 +14,7 @@
     const MENSAGEM_AUDIO = "🔇 Olá! Não consigo ouvir áudios no momento. Por favor, envie sua mensagem por texto. 💬";
 
     let bloqueioEnvioGlobal = false;
+    let debounceTimeout;
 
     function getHistoricoRespondidos() {
         const raw = localStorage.getItem(RESPONDIDOS_AUDIO_KEY);
@@ -48,9 +49,7 @@
         return false;
     }
 
-    // Função que verifica se a mensagem já foi enviada no DOM do chat (evita duplicação)
     function mensagemJaEnviada(texto) {
-        // Busca todas mensagens enviadas (message-out)
         const mensagensEnviadas = Array.from(document.querySelectorAll('div.message-out span.selectable-text'));
         return mensagensEnviadas.some(span => span.innerText === texto);
     }
@@ -65,74 +64,108 @@
         return true;
     }
 
-    function enviarMensagem(texto) {
+    function esperarMensagemNoDOM(texto, timeout = 6000) {
         return new Promise((resolve, reject) => {
-            if (bloqueioEnvioGlobal) {
-                console.log("🚫 Envio bloqueado globalmente para evitar duplicação");
-                reject("envio bloqueado");
+            let timer = setTimeout(() => {
+                observer.disconnect();
+                reject("Timeout esperando mensagem aparecer no DOM");
+            }, timeout);
+
+            const observer = new MutationObserver(() => {
+                if (mensagemJaEnviada(texto)) {
+                    clearTimeout(timer);
+                    observer.disconnect();
+                    resolve();
+                }
+            });
+
+            const main = document.querySelector('#main');
+            if (!main) {
+                clearTimeout(timer);
+                reject("Elemento #main não encontrado");
                 return;
             }
-            bloqueioEnvioGlobal = true;
 
-            const inputBox = document.querySelector('div[contenteditable="true"][data-tab="10"]');
-            if (!inputBox) {
-                bloqueioEnvioGlobal = false;
-                reject("inputBox not found");
-                return;
+            observer.observe(main, { childList: true, subtree: true });
+
+            // Checagem imediata caso já esteja no DOM
+            if (mensagemJaEnviada(texto)) {
+                clearTimeout(timer);
+                observer.disconnect();
+                resolve();
             }
-
-            if (!limparInput()) {
-                bloqueioEnvioGlobal = false;
-                reject("falha ao limpar input");
-                return;
-            }
-
-            setTimeout(() => {
-                document.execCommand('insertText', false, texto);
-                inputBox.dispatchEvent(new InputEvent("input", { bubbles: true }));
-
-                setTimeout(() => {
-                    const botaoEnviar = document.querySelector('button[data-tab="11"][aria-label="Enviar"]');
-                    if (botaoEnviar) {
-                        botaoEnviar.click();
-
-                        // Aguarda 1.5s para garantir envio e evita envio rápido duplicado
-                        setTimeout(() => {
-                            bloqueioEnvioGlobal = false;
-                            resolve();
-                        }, 1500);
-                    } else {
-                        bloqueioEnvioGlobal = false;
-                        reject("botão enviar não encontrado");
-                    }
-                }, 700);
-            }, 300);
         });
     }
 
+    async function enviarMensagem(texto) {
+        if (bloqueioEnvioGlobal) throw new Error("Envio bloqueado");
+
+        bloqueioEnvioGlobal = true;
+
+        const inputBox = document.querySelector('div[contenteditable="true"][data-tab="10"]');
+        if (!inputBox) {
+            bloqueioEnvioGlobal = false;
+            throw new Error("Campo de texto não encontrado");
+        }
+
+        if (!limparInput()) {
+            bloqueioEnvioGlobal = false;
+            throw new Error("Falha ao limpar campo de texto");
+        }
+
+        await new Promise(r => setTimeout(r, 300));
+        document.execCommand('insertText', false, texto);
+        inputBox.dispatchEvent(new InputEvent("input", { bubbles: true }));
+
+        await new Promise(r => setTimeout(r, 600));
+
+        const botaoEnviar = document.querySelector('button[data-tab="11"][aria-label="Enviar"]');
+        if (!botaoEnviar) {
+            bloqueioEnvioGlobal = false;
+            throw new Error("Botão enviar não encontrado");
+        }
+
+        botaoEnviar.click();
+
+        try {
+            await esperarMensagemNoDOM(texto);
+        } catch (err) {
+            console.warn("Mensagem não detectada no DOM dentro do timeout, prosseguindo:", err);
+        }
+
+        await new Promise(r => setTimeout(r, 1500));
+
+        bloqueioEnvioGlobal = false;
+    }
+
     async function verificarUltimaMensagem() {
-        if (bloqueioEnvioGlobal) return; // evita checar se já enviando
+        if (bloqueioEnvioGlobal) return;
+        if (debounceTimeout) return;
 
-        const mensagens = Array.from(document.querySelectorAll("div.message-in"));
-        if (mensagens.length === 0) return;
+        debounceTimeout = setTimeout(() => {
+            debounceTimeout = null;
+        }, 1500);
 
-        const ultimaMsg = mensagens[mensagens.length - 1];
-        if (!isAudioMessage(ultimaMsg)) return;
+        // Encontra todas mensagens de entrada que são áudios
+        const mensagensAudio = Array.from(document.querySelectorAll("div.message-in")).filter(isAudioMessage);
+        if (mensagensAudio.length === 0) return;
 
-        const idMsg = gerarIdUnico(ultimaMsg);
+        // Pega só a última mensagem áudio (mais recente)
+        const ultimaMsgAudio = mensagensAudio[mensagensAudio.length - 1];
+        if (!ultimaMsgAudio) return;
+
+        const idMsg = gerarIdUnico(ultimaMsgAudio);
         if (!idMsg) return;
 
         const historico = getHistoricoRespondidos();
-        if (historico.includes(idMsg)) {
-            return; // já respondeu
-        }
 
-        if (mensagemJaEnviada(MENSAGEM_AUDIO)) {
-            // Mensagem já está no chat, evita enviar duplicado
-            return;
-        }
+        // Se já respondeu essa última mensagem, não faz nada
+        if (historico.includes(idMsg)) return;
 
-        // Marca que vai enviar e salva no histórico para bloquear reenvio
+        // Se mensagem já existe na conversa (evita duplicação)
+        if (mensagemJaEnviada(MENSAGEM_AUDIO)) return;
+
+        // Salva o ID para não responder novamente
         historico.push(idMsg);
         salvarHistoricoRespondidos(historico);
 
