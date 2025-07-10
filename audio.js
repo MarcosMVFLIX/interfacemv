@@ -1,93 +1,74 @@
 // ==UserScript==
-// @name         WhatsApp Web - Auto Resposta Áudio Radar Híbrido
+// @name         WhatsApp AutoResposta Áudio
 // @namespace    http://tampermonkey.net/
-// @version      3.0
-// @description  Responde todos os áudios, sem falha, mesmo se enviados juntos ou o DOM atrasar. Detecta com precisão cada um.
-// @match        https://web.whatsapp.com/
+// @version      1.0
+// @description  Detecta mensagem de áudio e responde 1x com aviso que não ouviu o áudio usando mesma lógica do PIX para envio de mensagem.
+// @author       ChatGPT
+// @match        https://web.whatsapp.com/*
 // @grant        none
 // ==/UserScript==
 
 (function () {
     'use strict';
 
-    const MESSAGE_TO_SEND = "🔇 *Olá! Não consigo ouvir áudios no momento.* Por favor, envie sua mensagem por texto.";
-    const respondedAudiosMap = new Map(); // conversa => Set de ids de áudios processados
+    const RESPONDIDOS_AUDIO_KEY = "msgs_audio_respondidas";
+    const MENSAGEM_AUDIO = "🔇 Olá! Não consigo ouvir áudios no momento. Por favor, envie sua mensagem por texto.";
 
-    function getConversationName() {
-        const span = document.querySelector('#main header span[title]');
-        return span?.getAttribute('title') || 'desconhecido';
+    function getHistoricoRespondidos() {
+        const raw = localStorage.getItem(RESPONDIDOS_AUDIO_KEY);
+        return raw ? JSON.parse(raw) : [];
     }
 
-    function getAudioId(msg) {
-        // Usa o data-id se existir
-        const dataId = msg.getAttribute('data-id');
-        if (dataId) return dataId;
-
-        // Se não tiver, cria um hash simples
-        const hora = msg.querySelector('._2-f7')?.innerText || '';
-        const trecho = msg.innerHTML.slice(0, 50);
-        return hora + '|' + trecho;
+    function salvarHistoricoRespondidos(lista) {
+        localStorage.setItem(RESPONDIDOS_AUDIO_KEY, JSON.stringify(lista.slice(-100)));
     }
 
-    async function sendMessage(message) {
-        const textarea = document.querySelector('#main div[contenteditable="true"]');
-        if (!textarea) return false;
-
-        textarea.innerHTML = '';
-        textarea.focus();
-        document.execCommand('insertText', false, message);
-        textarea.dispatchEvent(new Event('input', { bubbles: true }));
-        await new Promise(r => setTimeout(r, 300));
-
-        const sendButton = document.querySelector('#main [aria-label="Enviar"]');
-        if (sendButton) {
-            sendButton.click();
-            return true;
-        }
-
-        return false;
+    function gerarIdUnico(msgElement) {
+        const texto = msgElement.innerText || "";
+        const timestamp = msgElement.querySelector("span[data-pre-plain-text]")?.getAttribute("data-pre-plain-text") || "";
+        return btoa(texto + timestamp);
     }
 
-    async function checkForNewAudios() {
-        const main = document.querySelector('#main');
-        if (!main) return;
+    function enviarMensagem(texto, callback) {
+        const inputBox = document.querySelector('div[contenteditable="true"][data-tab="10"]');
+        if (!inputBox) return;
 
-        const conversation = getConversationName();
-        if (!respondedAudiosMap.has(conversation)) {
-            respondedAudiosMap.set(conversation, new Set());
-        }
+        inputBox.focus();
+        document.execCommand('insertText', false, texto);
+        inputBox.dispatchEvent(new InputEvent("input", { bubbles: true }));
 
-        const processed = respondedAudiosMap.get(conversation);
-        const messages = main.querySelectorAll('.message-in');
-
-        for (const msg of messages) {
-            const isAudio = msg.querySelector('[data-icon="ptt-status"]');
-            if (!isAudio) continue;
-
-            const audioId = getAudioId(msg);
-            if (processed.has(audioId)) continue;
-
-            processed.add(audioId);
-
-            console.log(`[Auto Áudio] Respondendo áudio em ${conversation} | id: ${audioId}`);
-            await new Promise(r => setTimeout(r, 200));
-            const sent = await sendMessage(MESSAGE_TO_SEND);
-
-            if (!sent) {
-                processed.delete(audioId); // Permitir retry se falhou
-                console.warn(`[Auto Áudio] Falha ao enviar resposta para ${conversation}`);
+        setTimeout(() => {
+            const botaoEnviar = document.querySelector('button[data-tab="11"][aria-label="Enviar"]');
+            if (botaoEnviar) {
+                botaoEnviar.click();
+                if (callback) setTimeout(callback, 500);
             }
-        }
+        }, 300);
     }
 
-    function startMonitoring() {
-        setInterval(checkForNewAudios, 1000); // verifica a cada 1 segundo
-        console.log("[Auto Áudio] Radar híbrido ativado.");
+    function isAudioMessage(msgDiv) {
+        return msgDiv.querySelector('button[aria-label="Reproduzir mensagem de voz"]') !== null
+            || msgDiv.querySelector('span[aria-label="Mensagem de voz"]') !== null;
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', startMonitoring);
-    } else {
-        startMonitoring();
+    function verificarMensagens() {
+        const mensagens = document.querySelectorAll("div.message-in");
+        const historico = getHistoricoRespondidos();
+
+        mensagens.forEach(msg => {
+            if (!isAudioMessage(msg)) return;
+
+            const idMsg = gerarIdUnico(msg);
+            if (historico.includes(idMsg)) return;
+
+            historico.push(idMsg);
+            salvarHistoricoRespondidos(historico);
+
+            console.log("🟢 Mensagem de áudio detectada. Enviando resposta automática...");
+            enviarMensagem(MENSAGEM_AUDIO);
+        });
     }
+
+    setInterval(verificarMensagens, 2000);
+
 })();
