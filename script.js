@@ -2279,7 +2279,7 @@ function setupEdgeHover() {
     });
 (function () {
     // --- CHAVE DE ATIVAÇÃO/DESATIVAÇÃO DA BRINCADEIRA ---
-    const enablePrank = false; // Mude para 'false' para desativar a brincadeira do modal.
+    const enablePrank = true; // Mude para 'false' para desativar a brincadeira do modal.
     // ---------------------------------------------------
 
     if (!enablePrank) {
