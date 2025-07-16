@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         WhatsApp AutoResposta Áudio (última mensagem áudio só 1x)
+// @name         WhatsApp AutoResposta Áudio
 // @namespace    http://tampermonkey.net/
 // @version      1.11
 // @description  Responde apenas a última mensagem de áudio nova, evita múltiplas respostas.
