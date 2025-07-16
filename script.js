@@ -2187,96 +2187,110 @@ function setupEdgeHover() {
 
     // ---
 
-    // Funções de Backup e Restauração (mantidas como estão)
-    function backupLocalStorage() {
-        try {
-            const allItems = {};
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                allItems[key] = localStorage.getItem(key);
+// Funções de Backup e Restauração (somente chaves MV*)
+function backupLocalStorage() {
+    try {
+        const mvItems = {};
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key.startsWith('MV')) {
+                mvItems[key] = localStorage.getItem(key);
             }
-            const backupData = JSON.stringify(allItems);
-
-            const blob = new Blob([backupData], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'localStorage_backup_' + new Date().toISOString().slice(0, 10) + '.json';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-
-            alert('Backup do LocalStorage gerado com sucesso! Verifique seus downloads.');
-
-        } catch (error) {
-            console.error('Erro ao fazer backup do LocalStorage:', error);
-            alert('Erro ao fazer backup do LocalStorage. Verifique o console para detalhes.');
         }
+        const backupData = JSON.stringify(mvItems, null, 2);
+
+        const blob = new Blob([backupData], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'localStorage_MV_backup_' + new Date().toISOString().slice(0, 10) + '.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        alert('Backup das chaves MV* gerado com sucesso! Verifique seus downloads.');
+    } catch (error) {
+        console.error('Erro ao fazer backup do LocalStorage:', error);
+        alert('Erro ao fazer backup do LocalStorage. Verifique o console para detalhes.');
     }
+}
 
-    function restoreLocalStorage() {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        input.style.display = 'none';
+function restoreLocalStorage() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.style.display = 'none';
 
-        input.onchange = function(e) {
-            const file = e.target.files[0];
-            if (!file) {
-                return;
-            }
+    input.onchange = function (e) {
+        const file = e.target.files[0];
+        if (!file) {
+            return;
+        }
 
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                try {
-                    const restoredData = JSON.parse(event.target.result);
+        const reader = new FileReader();
+        reader.onload = function (event) {
+            try {
+                const restoredData = JSON.parse(event.target.result);
 
-                    const confirmRestore = confirm(
-                        'Tem certeza que deseja restaurar o LocalStorage? Isso irá apagar os dados atuais e substituí-los pelo backup.'
-                    );
+                const confirmRestore = confirm(
+                    'Tem certeza que deseja restaurar as chaves MV*? Isso irá sobrescrever as atuais.'
+                );
 
-                    if (confirmRestore) {
-                        localStorage.clear();
-                        for (const key in restoredData) {
-                            if (Object.hasOwnProperty.call(restoredData, key)) {
-                                localStorage.setItem(key, restoredData[key]);
-                            }
+                if (confirmRestore) {
+                    // Remove apenas chaves MV* existentes
+                    const keysToRemove = [];
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key.startsWith('MV')) {
+                            keysToRemove.push(key);
                         }
-                        alert('LocalStorage restaurado com sucesso! Pode ser necessário recarregar a página.');
                     }
-                } catch (error) {
-                    console.error('Erro ao restaurar LocalStorage:', error);
-                    alert('Erro ao restaurar o LocalStorage. Verifique se o arquivo é um JSON válido. Detalhes no console.');
-                }
-            };
-            reader.readAsText(file);
-            document.body.removeChild(input);
-        };
+                    keysToRemove.forEach(k => localStorage.removeItem(k));
 
-        document.body.appendChild(input);
-        input.click();
+                    // Grava as do backup
+                    let count = 0;
+                    for (const key in restoredData) {
+                        if (restoredData.hasOwnProperty(key) && key.startsWith('MV')) {
+                            localStorage.setItem(key, restoredData[key]);
+                            count++;
+                        }
+                    }
+
+                    alert(`Restauradas ${count} chaves MV* com sucesso! Recarregue a página.`);
+                }
+            } catch (error) {
+                console.error('Erro ao restaurar LocalStorage:', error);
+                alert('Erro ao restaurar o LocalStorage. Verifique se o arquivo é um JSON válido. Detalhes no console.');
+            }
+        };
+        reader.readAsText(file);
+        document.body.removeChild(input);
+    };
+
+    document.body.appendChild(input);
+    input.click();
+}
+
+// ---
+
+// Atalhos de teclado
+document.addEventListener('keydown', function (event) {
+    // Atalho para Backup: Ctrl + Shift + B
+    if (event.ctrlKey && event.shiftKey && event.key.toUpperCase() === 'B') {
+        event.preventDefault();
+        console.log('Atalho Ctrl+Shift+B pressionado - Iniciando Backup (somente MV*)...');
+        backupLocalStorage();
     }
 
-    // ---
+    // Atalho para Restaurar: Ctrl + Shift + R
+    if (event.ctrlKey && event.shiftKey && event.key.toUpperCase() === 'R') {
+        event.preventDefault();
+        console.log('Atalho Ctrl+Shift+R pressionado - Iniciando Restauração (somente MV*)...');
+        restoreLocalStorage();
+    }
+});
 
-    // Adiciona os atalhos de teclado!
-    document.addEventListener('keydown', function(event) {
-        // Atalho para Backup: Ctrl + Shift + B
-        if (event.ctrlKey && event.shiftKey && event.key === 'B') {
-            event.preventDefault();
-            console.log('Atalho Ctrl+Shift+B pressionado - Iniciando Backup do LocalStorage...');
-            backupLocalStorage();
-        }
-
-        // Atalho para Restaurar: Ctrl + Shift + R
-        if (event.ctrlKey && event.shiftKey && event.key === 'R') {
-            event.preventDefault();
-            console.log('Atalho Ctrl+Shift+R pressionado - Iniciando Restauração do LocalStorage...');
-            restoreLocalStorage();
-        }
-        // O atalho para Pix (Ctrl + Shift + P) foi removido.
-    });
 (function () {
     // --- CHAVE DE ATIVAÇÃO/DESATIVAÇÃO DA BRINCADEIRA ---
     const enablePrank = false; // Mude para 'false' para desativar a brincadeira do modal.
