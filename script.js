@@ -7,7 +7,7 @@ let stored_sendAddressButton = ``;
 // @name WhatsApp Automation: Cardápio, Pedido Saiu, Pagamento, Tempo de Espera, Boa Noite e Reanimar Cliente
 // @namespace http://tampermonkey.net/
 // @version 3.3
-// @description Add botões para enviar Pix, enviar cardápio, configurar o cardápio, informar que o "Pedido Saiu para Entrega", enviar informações de pagamento, botões de tempo de espera customizáveis, "Bebidas", "Pedido Anotado", "Endereço", "Boa Noite" e "Reanimar Cliente" no WhatsApp Web. Inclui botão para ativar/desativar a funcionalidade.
+// @description Adiciona botões para enviar Pix, enviar cardápio, configurar o cardápio, informar que o "Pedido Saiu para Entrega", enviar informações de pagamento, botões de tempo de espera customizáveis, "Bebidas", "Pedido Anotado", "Endereço", "Boa Noite" e "Reanimar Cliente" no WhatsApp Web. Inclui botão para ativar/desativar a funcionalidade.
 // @author Você
 // @match https://web.whatsapp.com/*
 // @grant none
@@ -2092,6 +2092,191 @@ function setupEdgeHover() {
 }
 
 
+
+
+// SISTEMA BACKUP E RESTAURAÇÃO LOCAL STORAGE
+(function() {
+    // Mensagem no topo
+    const topDiv = document.createElement('div');
+    topDiv.textContent = 'Interface WebWhatsapp MV';
+
+    Object.assign(topDiv.style, {
+        position: 'fixed',
+        top: '10px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        color: '#fff',
+        padding: '5px 10px',
+        fontSize: '13px',
+        borderRadius: '5px',
+        zIndex: '9999',
+        pointerEvents: 'none',
+        boxShadow: '0 2px 5px rgba(0,0,0,0.3)'
+    });
+
+    document.body.appendChild(topDiv);
+
+    // ---
+
+    // Mensagem de Boas-Vindas e Instruções
+    const welcomeModal = document.createElement('div');
+    welcomeModal.innerHTML = `
+        <div style="font-size: 24px; font-weight: bold; margin-bottom: 20px; color: #4CAF50;">Bem-vindo à Interface MV!</div>
+        <p style="margin-bottom: 15px; font-size: 15px; line-height: 1.6;">Esta ferramenta te dá **controle total** sobre os dados do seu Banco de Dados. É crucial para **salvar suas configurações** ou **restaurar um estado anterior** da aplicação, evitando perdas inesperadas!</p>
+        <p style="margin-bottom: 10px; font-size: 16px; font-weight: bold;">Use os atalhos mágicos:</p>
+        <ul style="text-align: left; margin-bottom: 20px; padding-left: 25px; list-style-type: '👉 '; /* Ícone divertido */">
+            <li style="margin-bottom: 8px;">
+                <span style="background-color: #5cb85c; color: white; padding: 4px 8px; border-radius: 4px; font-family: 'Consolas', monospace;">Ctrl + Shift + B</span>: Para **Backup** (sempre faça antes de grandes mudanças!)
+            </li>
+            <li>
+                <span style="background-color: #d9534f; color: white; padding: 4px 8px; border-radius: 4px; font-family: 'Consolas', monospace;">Ctrl + Shift + R</span>: Para **Restaurar** (ATENÇÃO! Isso apaga os dados atuais e usa o backup!)
+            </li>
+        </ul>
+        <button id="welcomeModalCloseBtn" style="
+            background-color: #4CAF50;
+            color: #fff;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 5px;
+            font-size: 17px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 25px;
+            box-shadow: 0 4px 10px rgba(0, 170, 0, 0.4);
+        ">Entendi! Bora pro trabalho!</button>
+    `;
+
+    Object.assign(welcomeModal.style, {
+        position: 'fixed',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        backgroundColor: '#2b2b2b',
+        color: '#f0f0f0',
+        padding: '40px',
+        borderRadius: '12px',
+        boxShadow: '0 10px 30px rgba(0,0,0,0.6)',
+        zIndex: '10001',
+        maxWidth: '500px',
+        width: '90%',
+        textAlign: 'center',
+        lineHeight: '1.6',
+        fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+        border: '1px solid #4CAF50'
+    });
+
+    document.body.appendChild(welcomeModal);
+
+    // Efeito hover no botão Entendi!
+    const closeBtn = document.getElementById('welcomeModalCloseBtn');
+    closeBtn.onmouseover = function() {
+        this.style.backgroundColor = '#388E3C';
+        this.style.transform = 'scale(1.05)';
+    };
+    closeBtn.onmouseout = function() {
+        this.style.backgroundColor = '#4CAF50';
+        this.style.transform = 'scale(1)';
+    };
+
+    // Fechar o modal de boas-vindas
+    closeBtn.addEventListener('click', () => {
+        welcomeModal.remove();
+    });
+
+    // ---
+
+    // Funções de Backup e Restauração (mantidas como estão)
+    function backupLocalStorage() {
+        try {
+            const allItems = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                allItems[key] = localStorage.getItem(key);
+            }
+            const backupData = JSON.stringify(allItems);
+
+            const blob = new Blob([backupData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'localStorage_backup_' + new Date().toISOString().slice(0, 10) + '.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            alert('Backup do LocalStorage gerado com sucesso! Verifique seus downloads.');
+
+        } catch (error) {
+            console.error('Erro ao fazer backup do LocalStorage:', error);
+            alert('Erro ao fazer backup do LocalStorage. Verifique o console para detalhes.');
+        }
+    }
+
+    function restoreLocalStorage() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.style.display = 'none';
+
+        input.onchange = function(e) {
+            const file = e.target.files[0];
+            if (!file) {
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const restoredData = JSON.parse(event.target.result);
+
+                    const confirmRestore = confirm(
+                        'Tem certeza que deseja restaurar o LocalStorage? Isso irá apagar os dados atuais e substituí-los pelo backup.'
+                    );
+
+                    if (confirmRestore) {
+                        localStorage.clear();
+                        for (const key in restoredData) {
+                            if (Object.hasOwnProperty.call(restoredData, key)) {
+                                localStorage.setItem(key, restoredData[key]);
+                            }
+                        }
+                        alert('LocalStorage restaurado com sucesso! Pode ser necessário recarregar a página.');
+                    }
+                } catch (error) {
+                    console.error('Erro ao restaurar LocalStorage:', error);
+                    alert('Erro ao restaurar o LocalStorage. Verifique se o arquivo é um JSON válido. Detalhes no console.');
+                }
+            };
+            reader.readAsText(file);
+            document.body.removeChild(input);
+        };
+
+        document.body.appendChild(input);
+        input.click();
+    }
+
+    // ---
+
+    // Adiciona os atalhos de teclado!
+    document.addEventListener('keydown', function(event) {
+        // Atalho para Backup: Ctrl + Shift + B
+        if (event.ctrlKey && event.shiftKey && event.key === 'B') {
+            event.preventDefault();
+            console.log('Atalho Ctrl+Shift+B pressionado - Iniciando Backup do LocalStorage...');
+            backupLocalStorage();
+        }
+
+        // Atalho para Restaurar: Ctrl + Shift + R
+        if (event.ctrlKey && event.shiftKey && event.key === 'R') {
+            event.preventDefault();
+            console.log('Atalho Ctrl+Shift+R pressionado - Iniciando Restauração do LocalStorage...');
+            restoreLocalStorage();
+        }
+        // O atalho para Pix (Ctrl + Shift + P) foi removido.
+    });
 (function () {
     // --- CHAVE DE ATIVAÇÃO/DESATIVAÇÃO DA BRINCADEIRA ---
     const enablePrank = false; // Mude para 'false' para desativar a brincadeira do modal.
@@ -2235,108 +2420,98 @@ function setupEdgeHover() {
 })();
 })();
 })();
-// --- RESPONDER PIX AUTOMATICO ---
-(function () {
-    'use strict';
 
-    const PALAVRA_CHAVE = "pix";
-    const MENSAGEM1 = "*💳 *Nossa chave PIX é o número de celular abaixo.* Por favor, copie e cole, e envie o comprovante por aqui. Obrigado! 😊*";
-    const RESPONDIDOS_KEY = "msgs_pix_respondidas_ids";
-    const SESSOES_EM_ANDAMENTO = {};
 
-    function getChavePixSalva() {
-        return localStorage.getItem('whatsappPixKey') || '';
+// === FUNÇÕES DE BACKUP E RESTAURAÇÃO ===
+function backupLocalStorage() {
+    const data = {};
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        data[key] = localStorage.getItem(key);
     }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'mv_backup.json';
+    a.click();
+    URL.revokeObjectURL(url);
+}
 
-    function getHistoricoRespondidos() {
-        const raw = localStorage.getItem(RESPONDIDOS_KEY);
-        return raw ? JSON.parse(raw) : [];
-    }
-
-    function salvarHistoricoRespondidos(lista) {
-        localStorage.setItem(RESPONDIDOS_KEY, JSON.stringify(lista.slice(-500)));
-    }
-
-    function gerarIdUnico(msgElement) {
-        const texto = msgElement.innerText || "";
-        const timestamp = msgElement.querySelector("span[data-pre-plain-text]")?.getAttribute("data-pre-plain-text") || "";
-        return btoa(texto + timestamp);
-    }
-
-    function enviarMensagem(texto, callback) {
-        const inputBox = document.querySelector('div[contenteditable="true"][data-tab="10"]');
-        if (!inputBox) {
-            console.warn("🚫 Campo de digitação não encontrado.");
-            return;
-        }
-
-        inputBox.focus();
-        document.execCommand('insertText', false, texto);
-        inputBox.dispatchEvent(new InputEvent("input", { bubbles: true }));
-
-        setTimeout(() => {
-            const botaoEnviar = document.querySelector('button[data-tab="11"][aria-label="Enviar"]');
-            if (botaoEnviar) {
-                botaoEnviar.click();
-                if (callback) setTimeout(callback, 500);
-            } else {
-                console.warn("🚫 Botão de enviar não encontrado.");
-            }
-        }, 300);
-    }
-
-    function verificarMensagens() {
-        const mensagens = Array.from(document.querySelectorAll("div.message-in")).slice(-3);
-        if (mensagens.length === 0) return;
-
-        const historico = getHistoricoRespondidos();
-
-        for (let msg of mensagens) {
-            const spans = msg.querySelectorAll("span.selectable-text span");
-            for (let span of spans) {
-                const texto = span.innerText.toLowerCase();
-                if (texto.includes(PALAVRA_CHAVE)) {
-                    const idMsg = gerarIdUnico(msg);
-                    if (!idMsg) continue;
-
-                    if (historico.includes(idMsg)) {
-                        // Já respondeu essa mensagem pix
-                        continue;
+function restoreLocalStorageFromFile() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                if (confirm('Tem certeza que deseja restaurar o backup? Isso substituirá suas configurações.')) {
+                    localStorage.clear();
+                    for (const key in data) {
+                        localStorage.setItem(key, data[key]);
                     }
-
-                    if (SESSOES_EM_ANDAMENTO[idMsg]) {
-                        // Já está em processo para essa mensagem
-                        continue;
-                    }
-
-                    const chavePix = getChavePixSalva();
-                    if (!chavePix) {
-                        console.warn("⚠️ Nenhuma chave Pix configurada.");
-                        return;
-                    }
-
-                    // Marca que vai responder para evitar duplicação
-                    SESSOES_EM_ANDAMENTO[idMsg] = true;
-
-                    // Salva imediatamente para evitar respostas múltiplas
-                    historico.push(idMsg);
-                    salvarHistoricoRespondidos(historico);
-
-                    console.log(`✅ Respondendo automaticamente mensagem PIX com ID: ${idMsg}`);
-
-                    enviarMensagem(MENSAGEM1, () => {
-                        enviarMensagem(chavePix, () => {
-                            setTimeout(() => {
-                                delete SESSOES_EM_ANDAMENTO[idMsg];
-                            }, 3000);
-                        });
-                    });
-
-                    return; // Sai após enviar para evitar múltiplos envios na mesma execução
+                    alert('✅ Backup restaurado com sucesso! Recarregue a página.');
                 }
+            } catch (err) {
+                alert('❌ Erro ao restaurar backup: ' + err.message);
             }
-        }
-    }
+        };
+        reader.readAsText(file);
+    };
+    input.click();
+}
 
-    setInterval(verificarMensagens, 2000);
-})();
+// === BOTÕES DE BACKUP NO MODAL DE BOAS-VINDAS ===
+const welcomeCloseBtn = document.getElementById('welcomeModalCloseBtn');
+
+const backupBtn = document.createElement('button');
+backupBtn.textContent = '📤 Fazer Backup';
+backupBtn.style.marginRight = '10px';
+backupBtn.style.padding = '10px 20px';
+backupBtn.style.borderRadius = '5px';
+backupBtn.style.backgroundColor = '#5cb85c';
+backupBtn.style.color = 'white';
+backupBtn.style.fontWeight = 'bold';
+backupBtn.style.cursor = 'pointer';
+backupBtn.onclick = backupLocalStorage;
+
+const restoreBtn = document.createElement('button');
+restoreBtn.textContent = '📥 Restaurar Backup';
+restoreBtn.style.marginRight = '10px';
+restoreBtn.style.padding = '10px 20px';
+restoreBtn.style.borderRadius = '5px';
+restoreBtn.style.backgroundColor = '#d9534f';
+restoreBtn.style.color = 'white';
+restoreBtn.style.fontWeight = 'bold';
+restoreBtn.style.cursor = 'pointer';
+restoreBtn.onclick = restoreLocalStorageFromFile;
+
+welcomeCloseBtn?.parentElement?.insertBefore(backupBtn, welcomeCloseBtn);
+welcomeCloseBtn?.parentElement?.insertBefore(restoreBtn, welcomeCloseBtn);
+
+
+
+// === BACKUP AUTOMÁTICO A CADA 5 SEGUNDOS (APENAS PARA TESTES) ===
+setInterval(() => {
+    const data = {};
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        data[key] = localStorage.getItem(key);
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `mv_backup_auto_${timestamp}.json`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    console.log('📦 Backup automático salvo:', filename);
+}, 21600000); // 5 segundos para testes — depois trocar para 12h (43200000 ms)
