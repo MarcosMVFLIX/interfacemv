@@ -2187,77 +2187,88 @@ function setupEdgeHover() {
 
     // ---
 
-    // Funções de Backup e Restauração (mantidas como estão)
-    function backupLocalStorage() {
-        try {
-            const allItems = {};
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                allItems[key] = localStorage.getItem(key);
+    function restoreLocalStorage() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.style.display = 'none';
+
+    input.onchange = function(e) {
+        const file = e.target.files[0];
+        if (!file) {
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            try {
+                const restoredData = JSON.parse(event.target.result);
+
+                const confirmRestore = confirm(
+                    'Tem certeza que deseja restaurar o LocalStorage? Isso irá substituir os dados atuais pelas configurações do backup (sem afetar o login do WhatsApp).'
+                );
+
+                if (confirmRestore) {
+                    // Limpa apenas suas próprias chaves, ou comenta para não limpar nada
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (isOurAppKey(key)) {
+                            localStorage.removeItem(key);
+                        }
+                    }
+
+                    // Restaura apenas as chaves da sua aplicação
+                    let count = 0;
+                    for (const key in restoredData) {
+                        if (Object.hasOwnProperty.call(restoredData, key)) {
+                            if (isOurAppKey(key)) {
+                                localStorage.setItem(key, restoredData[key]);
+                                count++;
+                            }
+                        }
+                    }
+
+                    alert(`Restaurado ${count} itens do backup com sucesso! Pode ser necessário recarregar a página.`);
+                }
+            } catch (error) {
+                console.error('Erro ao restaurar LocalStorage:', error);
+                alert('Erro ao restaurar o LocalStorage. Verifique se o arquivo é um JSON válido. Detalhes no console.');
             }
-            const backupData = JSON.stringify(allItems);
+        };
+        reader.readAsText(file);
+        document.body.removeChild(input);
+    };
 
-            const blob = new Blob([backupData], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'localStorage_backup_' + new Date().toISOString().slice(0, 10) + '.json';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+    document.body.appendChild(input);
+    input.click();
+}
 
-            alert('Backup do LocalStorage gerado com sucesso! Verifique seus downloads.');
+// Esta função identifica se a chave pertence à sua aplicação
+function isOurAppKey(key) {
+    const whatsappPrefixes = [
+        'WA',                // Ex: WAWebIDUpsellSnoozeUntil, WALangPhonePref
+        'whatsapp',          // Ex: whatsappDynamicMenus
+        'WebEncKeySalt',     //
+        'Session',
+        'WAMms4Conn',
+        'WANewsletters',
+        'Web',               // WebTimeSpentSession
+        'mutex',
+        'WANuxList',
+        'WANewslettersTabLastSeenTimestamp',
+        'WANoiseInfo',
+        'WACachedProfile'
+    ];
 
-        } catch (error) {
-            console.error('Erro ao fazer backup do LocalStorage:', error);
-            alert('Erro ao fazer backup do LocalStorage. Verifique o console para detalhes.');
+    // Se a chave começa com algum desses prefixos, ela é do WhatsApp
+    for (const prefix of whatsappPrefixes) {
+        if (key.startsWith(prefix)) {
+            return false;
         }
     }
 
-    function restoreLocalStorage() {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        input.style.display = 'none';
-
-        input.onchange = function(e) {
-            const file = e.target.files[0];
-            if (!file) {
-                return;
-            }
-
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                try {
-                    const restoredData = JSON.parse(event.target.result);
-
-                    const confirmRestore = confirm(
-                        'Tem certeza que deseja restaurar o LocalStorage? Isso irá apagar os dados atuais e substituí-los pelo backup.'
-                    );
-
-                    if (confirmRestore) {
-                        localStorage.clear();
-                        for (const key in restoredData) {
-                            if (Object.hasOwnProperty.call(restoredData, key)) {
-                                localStorage.setItem(key, restoredData[key]);
-                            }
-                        }
-                        alert('LocalStorage restaurado com sucesso! Pode ser necessário recarregar a página.');
-                    }
-                } catch (error) {
-                    console.error('Erro ao restaurar LocalStorage:', error);
-                    alert('Erro ao restaurar o LocalStorage. Verifique se o arquivo é um JSON válido. Detalhes no console.');
-                }
-            };
-            reader.readAsText(file);
-            document.body.removeChild(input);
-        };
-
-        document.body.appendChild(input);
-        input.click();
-    }
-
+    return true;
+}
     // ---
 
     // Adiciona os atalhos de teclado!
