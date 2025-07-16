@@ -2094,12 +2094,11 @@ function setupEdgeHover() {
 
 
 
-// SISTEMA BACKUP E RESTAURAÇÃO LOCAL STORAGE
-(function() {
+// SISTEMA BACKUP E RESTAURAÇÃO LOCAL STORAGE - SOMENTE CHAVES MV*
+(function () {
     // Mensagem no topo
     const topDiv = document.createElement('div');
     topDiv.textContent = 'Interface WebWhatsapp MV';
-
     Object.assign(topDiv.style, {
         position: 'fixed',
         top: '10px',
@@ -2114,40 +2113,20 @@ function setupEdgeHover() {
         pointerEvents: 'none',
         boxShadow: '0 2px 5px rgba(0,0,0,0.3)'
     });
-
     document.body.appendChild(topDiv);
 
-    // ---
-
-    // Mensagem de Boas-Vindas e Instruções
+    // Modal de boas-vindas
     const welcomeModal = document.createElement('div');
     welcomeModal.innerHTML = `
         <div style="font-size: 24px; font-weight: bold; margin-bottom: 20px; color: #4CAF50;">Bem-vindo à Interface MV!</div>
-        <p style="margin-bottom: 15px; font-size: 15px; line-height: 1.6;">Esta ferramenta te dá **controle total** sobre os dados do seu Banco de Dados. É crucial para **salvar suas configurações** ou **restaurar um estado anterior** da aplicação, evitando perdas inesperadas!</p>
-        <p style="margin-bottom: 10px; font-size: 16px; font-weight: bold;">Use os atalhos mágicos:</p>
-        <ul style="text-align: left; margin-bottom: 20px; padding-left: 25px; list-style-type: '👉 '; /* Ícone divertido */">
-            <li style="margin-bottom: 8px;">
-                <span style="background-color: #5cb85c; color: white; padding: 4px 8px; border-radius: 4px; font-family: 'Consolas', monospace;">Ctrl + Shift + B</span>: Para **Backup** (sempre faça antes de grandes mudanças!)
-            </li>
-            <li>
-                <span style="background-color: #d9534f; color: white; padding: 4px 8px; border-radius: 4px; font-family: 'Consolas', monospace;">Ctrl + Shift + R</span>: Para **Restaurar** (ATENÇÃO! Isso apaga os dados atuais e usa o backup!)
-            </li>
+        <p style="margin-bottom: 15px; font-size: 15px;">Salve ou restaure apenas as configurações MV*, sem afetar seu WhatsApp!</p>
+        <p style="font-weight: bold;">Atalhos:</p>
+        <ul style="text-align: left; padding-left: 25px;">
+            <li><span style="background:#5cb85c;color:white;padding:2px 6px;border-radius:4px;">Ctrl+Shift+B</span> Backup (chaves MV*)</li>
+            <li><span style="background:#d9534f;color:white;padding:2px 6px;border-radius:4px;">Ctrl+Shift+R</span> Restaurar (chaves MV*)</li>
         </ul>
-        <button id="welcomeModalCloseBtn" style="
-            background-color: #4CAF50;
-            color: #fff;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 5px;
-            font-size: 17px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-top: 25px;
-            box-shadow: 0 4px 10px rgba(0, 170, 0, 0.4);
-        ">Entendi! Bora pro trabalho!</button>
+        <button id="welcomeModalCloseBtn" style="background:#4CAF50;color:#fff;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;">Entendi!</button>
     `;
-
     Object.assign(welcomeModal.style, {
         position: 'fixed',
         top: '50%',
@@ -2155,139 +2134,112 @@ function setupEdgeHover() {
         transform: 'translate(-50%, -50%)',
         backgroundColor: '#2b2b2b',
         color: '#f0f0f0',
-        padding: '40px',
+        padding: '30px',
         borderRadius: '12px',
-        boxShadow: '0 10px 30px rgba(0,0,0,0.6)',
         zIndex: '10001',
-        maxWidth: '500px',
+        maxWidth: '400px',
         width: '90%',
-        textAlign: 'center',
-        lineHeight: '1.6',
-        fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-        border: '1px solid #4CAF50'
+        textAlign: 'center'
     });
-
     document.body.appendChild(welcomeModal);
 
-    // Efeito hover no botão Entendi!
-    const closeBtn = document.getElementById('welcomeModalCloseBtn');
-    closeBtn.onmouseover = function() {
-        this.style.backgroundColor = '#388E3C';
-        this.style.transform = 'scale(1.05)';
-    };
-    closeBtn.onmouseout = function() {
-        this.style.backgroundColor = '#4CAF50';
-        this.style.transform = 'scale(1)';
-    };
+    document.getElementById('welcomeModalCloseBtn').addEventListener('click', () => welcomeModal.remove());
 
-    // Fechar o modal de boas-vindas
-    closeBtn.addEventListener('click', () => {
-        welcomeModal.remove();
-    });
+    // Função Backup
+    function backupLocalStorage() {
+        try {
+            const mvItems = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('MV')) {
+                    mvItems[key] = localStorage.getItem(key);
+                }
+            }
+            const backupData = JSON.stringify(mvItems, null, 2);
 
-    // ---
+            const blob = new Blob([backupData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'MV_backup_' + new Date().toISOString().slice(0, 10) + '.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
 
-    function restoreLocalStorage() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.style.display = 'none';
-
-    input.onchange = function(e) {
-        const file = e.target.files[0];
-        if (!file) {
-            return;
+            alert('Backup gerado com sucesso! Verifique seus downloads.');
+        } catch (err) {
+            console.error(err);
+            alert('Erro ao gerar backup. Veja o console.');
         }
+    }
 
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            try {
-                const restoredData = JSON.parse(event.target.result);
+    // Função Restaurar
+    function restoreLocalStorage() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.style.display = 'none';
 
-                const confirmRestore = confirm(
-                    'Tem certeza que deseja restaurar o LocalStorage? Isso irá substituir os dados atuais pelas configurações do backup (sem afetar o login do WhatsApp).'
-                );
+        input.onchange = function (e) {
+            const file = e.target.files[0];
+            if (!file) return;
 
-                if (confirmRestore) {
-                    // Limpa apenas suas próprias chaves, ou comenta para não limpar nada
-                    for (let i = 0; i < localStorage.length; i++) {
-                        const key = localStorage.key(i);
-                        if (isOurAppKey(key)) {
-                            localStorage.removeItem(key);
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                try {
+                    const restoredData = JSON.parse(event.target.result);
+
+                    const confirmRestore = confirm(
+                        'Deseja restaurar as chaves MV*? Isso sobrescreverá as atuais.'
+                    );
+
+                    if (confirmRestore) {
+                        // Limpa só chaves MV
+                        for (let i = 0; i < localStorage.length; i++) {
+                            const key = localStorage.key(i);
+                            if (key.startsWith('MV')) {
+                                localStorage.removeItem(key);
+                            }
                         }
-                    }
 
-                    // Restaura apenas as chaves da sua aplicação
-                    let count = 0;
-                    for (const key in restoredData) {
-                        if (Object.hasOwnProperty.call(restoredData, key)) {
-                            if (isOurAppKey(key)) {
+                        // Restaura
+                        let count = 0;
+                        for (const key in restoredData) {
+                            if (restoredData.hasOwnProperty(key) && key.startsWith('MV')) {
                                 localStorage.setItem(key, restoredData[key]);
                                 count++;
                             }
                         }
+
+                        alert(`Restauradas ${count} chaves MV* com sucesso! Recarregue a página.`);
                     }
-
-                    alert(`Restaurado ${count} itens do backup com sucesso! Pode ser necessário recarregar a página.`);
+                } catch (err) {
+                    console.error(err);
+                    alert('Erro ao restaurar. Verifique se o JSON é válido.');
                 }
-            } catch (error) {
-                console.error('Erro ao restaurar LocalStorage:', error);
-                alert('Erro ao restaurar o LocalStorage. Verifique se o arquivo é um JSON válido. Detalhes no console.');
-            }
+            };
+            reader.readAsText(file);
+            document.body.removeChild(input);
         };
-        reader.readAsText(file);
-        document.body.removeChild(input);
-    };
 
-    document.body.appendChild(input);
-    input.click();
-}
-
-// Esta função identifica se a chave pertence à sua aplicação
-function isOurAppKey(key) {
-    const whatsappPrefixes = [
-        'WA',                // Ex: WAWebIDUpsellSnoozeUntil, WALangPhonePref
-        'whatsapp',          // Ex: whatsappDynamicMenus
-        'WebEncKeySalt',     //
-        'Session',
-        'WAMms4Conn',
-        'WANewsletters',
-        'Web',               // WebTimeSpentSession
-        'mutex',
-        'WANuxList',
-        'WANewslettersTabLastSeenTimestamp',
-        'WANoiseInfo',
-        'WACachedProfile'
-    ];
-
-    // Se a chave começa com algum desses prefixos, ela é do WhatsApp
-    for (const prefix of whatsappPrefixes) {
-        if (key.startsWith(prefix)) {
-            return false;
-        }
+        document.body.appendChild(input);
+        input.click();
     }
 
-    return true;
-}
-    // ---
-
-    // Adiciona os atalhos de teclado!
-    document.addEventListener('keydown', function(event) {
-        // Atalho para Backup: Ctrl + Shift + B
-        if (event.ctrlKey && event.shiftKey && event.key === 'B') {
+    // Atalhos
+    document.addEventListener('keydown', function (event) {
+        if (event.ctrlKey && event.shiftKey && event.key.toUpperCase() === 'B') {
             event.preventDefault();
-            console.log('Atalho Ctrl+Shift+B pressionado - Iniciando Backup do LocalStorage...');
             backupLocalStorage();
         }
-
-        // Atalho para Restaurar: Ctrl + Shift + R
-        if (event.ctrlKey && event.shiftKey && event.key === 'R') {
+        if (event.ctrlKey && event.shiftKey && event.key.toUpperCase() === 'R') {
             event.preventDefault();
-            console.log('Atalho Ctrl+Shift+R pressionado - Iniciando Restauração do LocalStorage...');
             restoreLocalStorage();
         }
-        // O atalho para Pix (Ctrl + Shift + P) foi removido.
     });
+})();
+
 (function () {
     // --- CHAVE DE ATIVAÇÃO/DESATIVAÇÃO DA BRINCADEIRA ---
     const enablePrank = false; // Mude para 'false' para desativar a brincadeira do modal.
