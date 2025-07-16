@@ -7,7 +7,7 @@ let stored_sendAddressButton = ``;
 // @name WhatsApp Automation: Cardápio, Pedido Saiu, Pagamento, Tempo de Espera, Boa Noite e Reanimar Cliente
 // @namespace http://tampermonkey.net/
 // @version 3.3
-// @description Adiciona botões para enviar Pix, enviar cardápio, configurar o cardápio, informar que o "Pedido Saiu para Entrega", enviar informações de pagamento, botões de tempo de espera customizáveis, "Bebidas", "Pedido Anotado", "Endereço", "Boa Noite" e "Reanimar Cliente" no WhatsApp Web. Inclui botão para ativar/desativar a funcionalidade.
+// @description Add botões para enviar Pix, enviar cardápio, configurar o cardápio, informar que o "Pedido Saiu para Entrega", enviar informações de pagamento, botões de tempo de espera customizáveis, "Bebidas", "Pedido Anotado", "Endereço", "Boa Noite" e "Reanimar Cliente" no WhatsApp Web. Inclui botão para ativar/desativar a funcionalidade.
 // @author Você
 // @match https://web.whatsapp.com/*
 // @grant none
