@@ -2118,7 +2118,7 @@ function setupEdgeHover() {
     // Modal de boas-vindas
     const welcomeModal = document.createElement('div');
     welcomeModal.innerHTML = `
-        <div style="font-size: 24px; font-weight: bold; margin-bottom: 20px; color: #4CAF50;">Bem-vindo à Interface MV!</div>
+        <div style="font-size: 24px; font-weight: bold; margin-bottom: 20px; color: #4CAF50;">Bem-vindo à Interface MV</div>
         <p style="margin-bottom: 15px; font-size: 15px;">Salve ou restaure apenas as configurações MV*, sem afetar seu WhatsApp!</p>
         <p style="font-weight: bold;">Atalhos:</p>
         <ul style="text-align: left; padding-left: 25px;">
