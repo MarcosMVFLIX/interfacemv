@@ -2238,7 +2238,6 @@ function setupEdgeHover() {
             restoreLocalStorage();
         }
     });
-})();
 
 (function () {
     // --- CHAVE DE ATIVAÇÃO/DESATIVAÇÃO DA BRINCADEIRA ---
