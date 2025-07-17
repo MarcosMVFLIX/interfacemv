@@ -105,7 +105,10 @@
                     waitTimePosition: 'top',
                     soundEnabled: true,
                     animationsEnabled: true,
-                    audioAutoReply: false // NOVO: Configuração para auto-resposta de áudio
+                    audioAutoReply: false, // NOVO: Configuração para auto-resposta de áudio
+                    tagSystemEnabled: false, // NOVO: Configuração para sistema de tags
+                    autoBackupEnabled: false, // NOVO: Configuração para backup automático
+                    autoBackupInterval: '01:00:00' // NOVO: Intervalo de backup automático (HH:MM:SS)
                 }),
                 statistics: this.get('statistics', {
                     customButtonClicks: {},
@@ -473,7 +476,406 @@
     })();
 
     // =================================================================================
-    // 6. MÓDULO DE INTERFACE DO USUÁRIO (UI)
+    // 6. MÓDULO DE BACKUP AUTOMÁTICO
+    // =================================================================================
+    const AutoBackupManager = (() => {
+        let backupInterval = null;
+        let isActive = false;
+
+        function parseTimeInterval(timeString) {
+            // Converte formato HH:MM:SS para milissegundos
+            const parts = timeString.split(':');
+            const hours = parseInt(parts[0]) || 0;
+            const minutes = parseInt(parts[1]) || 0;
+            const seconds = parseInt(parts[2]) || 0;
+            return (hours * 3600 + minutes * 60 + seconds) * 1000;
+        }
+
+        function createBackupFile() {
+            try {
+                const exportData = DataManager.exportSettings();
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const filename = `whatsapp-automation-backup-${timestamp}.json`;
+
+                const blob = new Blob([exportData], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                console.log(`[WA MV] Backup automático criado: ${filename}`);
+                return true;
+            } catch (error) {
+                console.error('[WA MV] Erro ao criar backup automático:', error);
+                return false;
+            }
+        }
+
+        function startAutoBackup(intervalString) {
+            if (backupInterval) {
+                clearInterval(backupInterval);
+            }
+
+            const intervalMs = parseTimeInterval(intervalString);
+            if (intervalMs < 60000) { // Mínimo de 1 minuto
+                console.warn('[WA MV] Intervalo de backup muito pequeno. Usando 1 minuto como mínimo.');
+                intervalMs = 60000;
+            }
+
+            backupInterval = setInterval(() => {
+                createBackupFile();
+            }, intervalMs);
+
+            isActive = true;
+            console.log(`[WA MV] Backup automático iniciado com intervalo de ${intervalString}`);
+        }
+
+        function stopAutoBackup() {
+            if (backupInterval) {
+                clearInterval(backupInterval);
+                backupInterval = null;
+            }
+            isActive = false;
+            console.log('[WA MV] Backup automático parado.');
+        }
+
+        return {
+            start: (intervalString) => {
+                startAutoBackup(intervalString);
+            },
+            stop: () => {
+                stopAutoBackup();
+            },
+            checkStatus: () => isActive,
+            createManualBackup: () => {
+                return createBackupFile();
+            }
+        };
+    })();
+
+    // =================================================================================
+    // 7. MÓDULO DE GERENCIAMENTO DE TAGS (Integrado de TAG.txt)
+    // =================================================================================
+    const TagManager = (() => {
+        const TAGS = {
+            "Novo Pedido": "#FFC107",
+            "Enviado p/ Cozinha": "#FD7E14",
+            "Saiu para Entrega": "#1C7947",
+            "Aguardando buscar": "#6F42C1",
+            "Dúvida": "#DC3545",
+            "Cancelado": "#6C757D",
+            "Remover Tag": ""
+        };
+
+        const TAG_BUTTON_CLASS = 'whatsapp-tag-button';
+        const TAG_POPUP_CLASS = 'whatsapp-tag-popup';
+        const TAG_DISPLAY_CLASS = 'whatsapp-delivery-tag';
+
+        let savedTags = {};
+        let chatListObserver = null;
+        let isActive = false;
+
+        function loadTags() {
+            try {
+                return JSON.parse(localStorage.getItem('whatsappDeliveryTags')) || {};
+            } catch (e) {
+                console.error('[WA MV] Erro ao carregar tags do localStorage:', e);
+                return {};
+            }
+        }
+
+        function saveTags(tags) {
+            localStorage.setItem('whatsappDeliveryTags', JSON.stringify(tags));
+        }
+
+        function injectTagStyles() {
+            if (document.getElementById('whatsapp-delivery-tags-style')) {
+                return;
+            }
+            const style = document.createElement('style');
+            style.id = 'whatsapp-delivery-tags-style';
+            style.textContent = `
+                ._ak8q {
+                    display: flex !important;
+                    align-items: center;
+                    flex-wrap: nowrap;
+                    min-width: 0;
+                    position: relative;
+                    width: 100%;
+                }
+
+                ._ak8q > span[dir="auto"][title] {
+                    min-width: 0;
+                    flex-shrink: 1;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: calc(100% - 90px);
+                }
+
+                .${TAG_DISPLAY_CLASS} {
+                    display: block;
+                    padding: 4px 8px;
+                    border-radius: 5px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    color: #FFFFFF;
+                    white-space: nowrap;
+                    position: absolute;
+                    right: 0;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    z-index: 5;
+                    text-shadow: 0px 0px 2px rgba(0,0,0,0.2);
+                }
+                .${TAG_DISPLAY_CLASS}[style*="#FFC107"] {
+                    color: #333;
+                    text-shadow: none;
+                }
+
+                .${TAG_BUTTON_CLASS} {
+                    background: none;
+                    border: 1px solid #ccc;
+                    border-radius: 50%;
+                    width: 24px;
+                    height: 24px;
+                    font-size: 14px;
+                    line-height: 20px;
+                    text-align: center;
+                    cursor: pointer;
+                    color: #555;
+                    vertical-align: middle;
+                    transition: background-color 0.2s;
+                    position: absolute;
+                    right: 30px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    z-index: 10;
+                    box-sizing: border-box;
+                }
+                .${TAG_BUTTON_CLASS}:hover {
+                    background-color: #eee;
+                }
+                .${TAG_POPUP_CLASS} {
+                    position: fixed;
+                    background-color: white;
+                    border: 1px solid #ddd;
+                    border-radius: 5px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    z-index: 1000;
+                    padding: 5px 0;
+                    min-width: 120px;
+                }
+                .${TAG_POPUP_CLASS} button {
+                    display: block;
+                    width: 100%;
+                    padding: 8px 10px;
+                    text-align: left;
+                    background: none;
+                    border: none;
+                    cursor: pointer;
+                    font-size: 13px;
+                    color: #333;
+                }
+                .${TAG_POPUP_CLASS} button:hover {
+                    background-color: #f0f0f0;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        function renderTag(chatElement, contactName, tagText, tagColor) {
+            let nameContainer = chatElement.querySelector('._ak8q, [data-testid="chat-tile-header"]');
+            if (!nameContainer) {
+                nameContainer = chatElement.querySelector('span[dir="auto"][title]')?.closest('div');
+            }
+
+            if (!nameContainer) {
+                return;
+            }
+
+            let existingTag = nameContainer.querySelector(`.${TAG_DISPLAY_CLASS}`);
+            if (existingTag) {
+                existingTag.remove();
+            }
+
+            if (tagText) {
+                const tagSpan = document.createElement('span');
+                tagSpan.className = TAG_DISPLAY_CLASS;
+                tagSpan.textContent = tagText;
+                tagSpan.style.backgroundColor = tagColor;
+                nameContainer.appendChild(tagSpan);
+            }
+        }
+
+        function createTagButton(chatElement) {
+            if (chatElement.querySelector(`.${TAG_BUTTON_CLASS}`)) {
+                return;
+            }
+
+            const button = document.createElement('button');
+            button.className = TAG_BUTTON_CLASS;
+            button.textContent = '🏷️';
+            button.title = 'Definir Status do Pedido';
+
+            button.addEventListener('click', (event) => {
+                event.stopPropagation();
+                event.preventDefault();
+
+                const contactNameElement = chatElement.querySelector('span[dir="auto"][title]');
+                if (!contactNameElement || !contactNameElement.title) {
+                    return;
+                }
+                const contactName = contactNameElement.title;
+
+                document.querySelectorAll(`.${TAG_POPUP_CLASS}`).forEach(p => p.remove());
+
+                const popup = document.createElement('div');
+                popup.className = TAG_POPUP_CLASS;
+
+                for (const tagText in TAGS) {
+                    const tagColor = TAGS[tagText];
+                    const tagOptionButton = document.createElement('button');
+                    tagOptionButton.textContent = tagText;
+                    tagOptionButton.style.backgroundColor = tagColor ? tagColor : 'transparent';
+                    tagOptionButton.style.color = tagText === "Remover Tag" ? '#FF0000' : '#333';
+                    tagOptionButton.style.fontWeight = tagText === "Remover Tag" ? "bold" : "normal";
+
+                    tagOptionButton.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (tagText === "Remover Tag") {
+                            delete savedTags[contactName];
+                            renderTag(chatElement, contactName, '', '');
+                        } else {
+                            savedTags[contactName] = { text: tagText, color: tagColor };
+                            renderTag(chatElement, contactName, tagText, tagColor);
+                        }
+                        saveTags(savedTags);
+                        popup.remove();
+                    });
+                    popup.appendChild(tagOptionButton);
+                }
+
+                const rect = button.getBoundingClientRect();
+                popup.style.top = `${rect.top + window.scrollY}px`;
+                popup.style.left = `${rect.right + window.scrollX + 5}px`;
+
+                document.body.appendChild(popup);
+
+                const closePopup = (e) => {
+                    if (!popup.contains(e.target) && e.target !== button) {
+                        popup.remove();
+                        document.removeEventListener('click', closePopup);
+                    }
+                };
+                setTimeout(() => {
+                    document.addEventListener('click', closePopup);
+                }, 100);
+            });
+
+            const targetContainer = chatElement.querySelector('div[role="gridcell"] > div > div > div:nth-child(2) > div:nth-child(2), div._ak8j, div[data-testid="last-msg-time-container"]');
+
+            if (targetContainer) {
+                targetContainer.style.position = 'relative';
+                targetContainer.appendChild(button);
+            } else {
+                chatElement.appendChild(button);
+            }
+        }
+
+        function processChatElementForTags(chatElement) {
+            if (!chatElement || chatElement.dataset.tagProcessed || !isActive) {
+                return;
+            }
+            chatElement.dataset.tagProcessed = 'true';
+
+            createTagButton(chatElement);
+            const contactNameElement = chatElement.querySelector('span[dir="auto"][title]');
+            if (contactNameElement && contactNameElement.title) {
+                const contactName = contactNameElement.title;
+                const tagInfo = savedTags[contactName];
+                if (tagInfo && tagInfo.text) {
+                    renderTag(chatElement, contactName, tagInfo.text, tagInfo.color);
+                }
+            }
+        }
+
+        async function initTagObserver() {
+            try {
+                const chatList = await WhatsAppActions.waitForElement(
+                    'div[data-testid="list-section-main"] div[role="grid"], div[aria-label="Lista de conversas"][role="grid"], div[data-testid="chat-list"]',
+                    30000
+                );
+
+                if (chatListObserver) {
+                    chatListObserver.disconnect();
+                }
+
+                chatList.querySelectorAll('div[role="listitem"]').forEach(processChatElementForTags);
+
+                chatListObserver = new MutationObserver(mutations => {
+                    mutations.forEach(mutation => {
+                        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                            mutation.addedNodes.forEach(node => {
+                                if (node.nodeType === 1 && node.matches('div[role="listitem"]')) {
+                                    processChatElementForTags(node);
+                                }
+                            });
+                        }
+                    });
+                });
+
+                chatListObserver.observe(chatList, { childList: true, subtree: true });
+                console.log('[WA MV] Sistema de tags inicializado com sucesso!');
+
+            } catch (error) {
+                console.error('[WA MV] Erro ao configurar o observador de tags:', error);
+                setTimeout(initTagObserver, 3000);
+            }
+        }
+
+        function removeAllTagButtons() {
+            document.querySelectorAll(`.${TAG_BUTTON_CLASS}`).forEach(btn => btn.remove());
+            document.querySelectorAll(`.${TAG_DISPLAY_CLASS}`).forEach(tag => tag.remove());
+            document.querySelectorAll(`.${TAG_POPUP_CLASS}`).forEach(popup => popup.remove());
+
+            // Remove o atributo de processamento para permitir reprocessamento
+            document.querySelectorAll('[data-tag-processed]').forEach(el => {
+                delete el.dataset.tagProcessed;
+            });
+        }
+
+        return {
+            start: () => {
+                if (!isActive) {
+                    isActive = true;
+                    savedTags = loadTags();
+                    injectTagStyles();
+                    initTagObserver();
+                    console.log('[WA MV] Sistema de tags ativado.');
+                }
+            },
+            stop: () => {
+                if (isActive) {
+                    isActive = false;
+                    if (chatListObserver) {
+                        chatListObserver.disconnect();
+                        chatListObserver = null;
+                    }
+                    removeAllTagButtons();
+                    console.log('[WA MV] Sistema de tags desativado.');
+                }
+            },
+            checkStatus: () => isActive
+        };
+    })();
+
+    // =================================================================================
+    // 8. MÓDULO DE INTERFACE DO USUÁRIO (UI)
     // =================================================================================
     const UIManager = {
         state: { settings: DataManager.loadAll() },
@@ -1148,6 +1550,25 @@
                                     <span class="mv-slider"></span>
                                 </label>
                             </div>
+                            <div class="mv-form-group" style="display: flex; align-items: center; gap: 15px;">
+                                <label for="mv-tag-system-toggle" style="margin-bottom: 0;">Ativar Tag</label>
+                                <label class="mv-switch">
+                                    <input type="checkbox" id="mv-tag-system-toggle">
+                                    <span class="mv-slider"></span>
+                                </label>
+                            </div>
+                            <div class="mv-form-group" style="display: flex; align-items: center; gap: 15px;">
+                                <label for="mv-auto-backup-toggle" style="margin-bottom: 0;">Backup automático</label>
+                                <label class="mv-switch">
+                                    <input type="checkbox" id="mv-auto-backup-toggle">
+                                    <span class="mv-slider"></span>
+                                </label>
+                            </div>
+                            <div class="mv-form-group">
+                                <label for="mv-auto-backup-interval">Intervalo do backup (HH:MM:SS)</label>
+                                <input type="text" id="mv-auto-backup-interval" placeholder="01:00:00" pattern="[0-9]{2}:[0-9]{2}:[0-9]{2}">
+                                <small style="color: #8696a0; margin-top: 5px; display: block;">Formato: Horas:Minutos:Segundos (ex: 01:30:00 para 1h30min)</small>
+                            </div>
                         </div>
 
                         <div id="tab-colors" class="mv-tab-content">
@@ -1498,7 +1919,10 @@
             document.getElementById('mv-wait-time-position').value = general.waitTimePosition;
             document.getElementById('mv-sound-toggle').checked = general.soundEnabled;
             document.getElementById('mv-animations-toggle').checked = general.animationsEnabled;
-            document.getElementById('mv-audio-auto-reply-toggle').checked = general.audioAutoReply; // NOVO: Estado do toggle de áudio
+            document.getElementById('mv-audio-auto-reply-toggle').checked = general.audioAutoReply; // Estado do toggle de áudio
+            document.getElementById('mv-tag-system-toggle').checked = general.tagSystemEnabled; // NOVO: Estado do toggle de tags
+            document.getElementById('mv-auto-backup-toggle').checked = general.autoBackupEnabled; // NOVO: Estado do toggle de backup
+            document.getElementById('mv-auto-backup-interval').value = general.autoBackupInterval; // NOVO: Intervalo de backup
 
             const colors = UIManager.state.settings.colors;
             document.getElementById('mv-color-custom').value = colors.customButtons;
@@ -1797,7 +2221,10 @@
             UIManager.state.settings.general.waitTimePosition = document.getElementById('mv-wait-time-position').value;
             UIManager.state.settings.general.soundEnabled = document.getElementById('mv-sound-toggle').checked;
             UIManager.state.settings.general.animationsEnabled = document.getElementById('mv-animations-toggle').checked;
-            UIManager.state.settings.general.audioAutoReply = document.getElementById('mv-audio-auto-reply-toggle').checked; // NOVO: Salva estado do toggle de áudio
+            UIManager.state.settings.general.audioAutoReply = document.getElementById('mv-audio-auto-reply-toggle').checked; // Salva estado do toggle de áudio
+            UIManager.state.settings.general.tagSystemEnabled = document.getElementById('mv-tag-system-toggle').checked; // NOVO: Salva estado do toggle de tags
+            UIManager.state.settings.general.autoBackupEnabled = document.getElementById('mv-auto-backup-toggle').checked; // NOVO: Salva estado do toggle de backup
+            UIManager.state.settings.general.autoBackupInterval = document.getElementById('mv-auto-backup-interval').value; // NOVO: Salva intervalo de backup
 
             if (UIManager.state.settings.general.audioAutoReply) {
                 AudioAutoReply.start();
@@ -1805,6 +2232,18 @@
                 AudioAutoReply.stop();
             }
             UIManager.updateAudioStatusIcon(); // Atualiza o ícone imediatamente
+
+            if (UIManager.state.settings.general.tagSystemEnabled) {
+                TagManager.start();
+            } else {
+                TagManager.stop();
+            }
+
+            if (UIManager.state.settings.general.autoBackupEnabled) {
+                AutoBackupManager.start(UIManager.state.settings.general.autoBackupInterval);
+            } else {
+                AutoBackupManager.stop();
+            }
 
             UIManager.state.settings.colors.customButtons = document.getElementById('mv-color-custom').value;
             UIManager.state.settings.colors.waitButtons = document.getElementById('mv-color-wait').value;
@@ -2115,12 +2554,47 @@
                 }
                 UIManager.updateAudioStatusIcon();
             });
+
+            // NOVO: Event Listener para o toggle de sistema de tags
+            document.getElementById('mv-tag-system-toggle').addEventListener('change', (e) => {
+                UIManager.state.settings.general.tagSystemEnabled = e.target.checked;
+                if (e.target.checked) {
+                    TagManager.start();
+                } else {
+                    TagManager.stop();
+                }
+                // Salva imediatamente a configuração
+                DataManager.set('general', UIManager.state.settings.general);
+            });
+
+            // NOVO: Event Listener para o toggle de backup automático
+            document.getElementById('mv-auto-backup-toggle').addEventListener('change', (e) => {
+                UIManager.state.settings.general.autoBackupEnabled = e.target.checked;
+                if (e.target.checked) {
+                    const interval = document.getElementById('mv-auto-backup-interval').value || '01:00:00';
+                    AutoBackupManager.start(interval);
+                } else {
+                    AutoBackupManager.stop();
+                }
+                // Salva imediatamente a configuração
+                DataManager.set('general', UIManager.state.settings.general);
+            });
+
+            // NOVO: Event Listener para mudança no intervalo de backup
+            document.getElementById('mv-auto-backup-interval').addEventListener('change', (e) => {
+                UIManager.state.settings.general.autoBackupInterval = e.target.value;
+                if (UIManager.state.settings.general.autoBackupEnabled) {
+                    AutoBackupManager.start(e.target.value);
+                }
+                // Salva imediatamente a configuração
+                DataManager.set('general', UIManager.state.settings.general);
+            });
         },
 
         init: function() {
             if (document.getElementById(CONFIG.containerId)) return;
 
-            console.log('[WA MV] UI v5.4 com ajustes de Layout e Áudio Integrado injetada.');
+            console.log('[WA MV] UI v5.4 com ajustes de Layout, Áudio, Tags e Backup Automático injetada.');
             this.injectStyles();
             this.createDOM();
             this.renderFloatingButtons();
@@ -2131,17 +2605,27 @@
             if (this.state.settings.general.audioAutoReply) {
                 AudioAutoReply.start();
             }
+
+            // Inicia o sistema de tags se estiver ativado nas configurações
+            if (this.state.settings.general.tagSystemEnabled) {
+                TagManager.start();
+            }
+
+            // Inicia o backup automático se estiver ativado nas configurações
+            if (this.state.settings.general.autoBackupEnabled) {
+                AutoBackupManager.start(this.state.settings.general.autoBackupInterval);
+            }
         }
     };
 
     // =================================================================================
-    // 7. INICIALIZAÇÃO DO SCRIPT
+    // 9. INICIALIZAÇÃO DO SCRIPT
     // =================================================================================
-    console.log('[WA MV] Script v5.4 com ajustes de Layout e Áudio Integrado carregado. Observando o DOM...');
+    console.log('[WA MV] Script v5.4 com Layout, Áudio, Tags e Backup Automático carregado. Observando o DOM...');
 
     const observer = new MutationObserver((mutations, obs) => {
         if (document.querySelector(CONFIG.selectors.app)) {
-            console.log('[WA MV] Elemento #app encontrado. Iniciando a UI com ajustes e áudio.');
+            console.log('[WA MV] Elemento #app encontrado. Iniciando a UI com ajustes, áudio, tags e backup automático.');
             UIManager.init();
             obs.disconnect();
         }
@@ -2150,4 +2634,3 @@
     observer.observe(document.body, { childList: true, subtree: true });
 
 })();
-
