@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         WhatsApp Automation MV (v5.3 - Layout Personalizável)
+// @name         WhatsApp Automation MV (v5.4 - Áudio Integrado)
 // @namespace    http://tampermonkey.net/
-// @version      5.3
-// @description  Versão com personalização de posição e tamanho dos botões flutuantes.
+// @version      5.4
+// @description  Versão com personalização de posição e tamanho dos botões flutuantes e integração de áudio.
 // @author       Manus AI Assistant & [Seu Nome]
 // @match        https://web.whatsapp.com/*
 // @grant        none
@@ -30,10 +30,9 @@
             reanimateButton: '#ff6b35',
             menuButton: '#25d366'
         },
-        // NOVO: Configurações padrão de layout
         defaultLayout: {
-            bottomOffset: 20, // Posição vertical inicial em pixels
-            scale: 1.0 // Escala inicial (1.0 = 100%)
+            bottomOffset: 20,
+            scale: 1.0
         },
         themes: {
             default: {
@@ -99,15 +98,14 @@
                     image: null
                 }),
                 colors: this.get('colors', CONFIG.defaultColors),
-                // NOVO: Carrega as configurações de layout
                 layout: this.get('layout', CONFIG.defaultLayout),
                 general: this.get('general', {
                     autoHide: false,
                     autoHideDuration: 10,
                     waitTimePosition: 'top',
-                    currentTheme: 'default',
                     soundEnabled: true,
-                    animationsEnabled: true
+                    animationsEnabled: true,
+                    audioAutoReply: false // NOVO: Configuração para auto-resposta de áudio
                 }),
                 statistics: this.get('statistics', {
                     customButtonClicks: {},
@@ -128,7 +126,7 @@
         exportSettings: function() {
             const settings = this.loadAll();
             const exportData = {
-                version: '5.3', // Versão atualizada
+                version: '5.4',
                 timestamp: new Date().toISOString(),
                 settings: settings
             };
@@ -287,7 +285,195 @@
     };
 
     // =================================================================================
-    // 5. MÓDULO DE INTERFACE DO USUÁRIO (UI)
+    // 5. MÓDULO DE AUTO-RESPOSTA DE ÁUDIO (Integrado de audio.txt)
+    // =================================================================================
+    const AudioAutoReply = (() => {
+        const RESPONDIDOS_AUDIO_KEY = "msgs_audio_respondidas_ids";
+        const MENSAGEM_AUDIO = "🔇 Olá! Não consigo ouvir áudios no momento. Por favor, envie sua mensagem por texto. 💬";
+
+        let bloqueioEnvioGlobal = false;
+        let debounceTimeout;
+        let audioCheckInterval;
+
+        function getHistoricoRespondidos() {
+            const raw = localStorage.getItem(RESPONDIDOS_AUDIO_KEY);
+            return raw ? JSON.parse(raw) : [];
+        }
+
+        function salvarHistoricoRespondidos(lista) {
+            localStorage.setItem(RESPONDIDOS_AUDIO_KEY, JSON.stringify(lista.slice(-500)));
+        }
+
+        function gerarIdUnico(msgElement) {
+            const texto = msgElement.innerText || "";
+            const timestamp = msgElement.querySelector("span[data-pre-plain-text]")?.getAttribute("data-pre-plain-text") || "";
+            return btoa(texto + timestamp);
+        }
+
+        function isAudioMessage(msgDiv) {
+            const btns = msgDiv.querySelectorAll('button[aria-label]');
+            for (const btn of btns) {
+                const label = btn.getAttribute('aria-label').toLowerCase();
+                if (label.includes('voz') || label.includes('áudio') || label.includes('audio')) {
+                    return true;
+                }
+            }
+            const spans = msgDiv.querySelectorAll('span[aria-label]');
+            for (const span of spans) {
+                const label = span.getAttribute('aria-label').toLowerCase();
+                if (label.includes('voz') || label.includes('áudio') || label.includes('audio')) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function mensagemJaEnviada(texto) {
+            const mensagensEnviadas = Array.from(document.querySelectorAll('div.message-out span.selectable-text'));
+            return mensagensEnviadas.some(span => span.innerText === texto);
+        }
+
+        function limparInput() {
+            const inputBox = document.querySelector('div[contenteditable="true"][data-tab="10"]');
+            if (!inputBox) return false;
+
+            inputBox.focus();
+            document.execCommand('selectAll', false, null);
+            document.execCommand('delete');
+            return true;
+        }
+
+        function esperarMensagemNoDOM(texto, timeout = 6000) {
+            return new Promise((resolve, reject) => {
+                let timer = setTimeout(() => {
+                    observer.disconnect();
+                    reject("Timeout esperando mensagem aparecer no DOM");
+                }, timeout);
+
+                const observer = new MutationObserver(() => {
+                    if (mensagemJaEnviada(texto)) {
+                        clearTimeout(timer);
+                        observer.disconnect();
+                        resolve();
+                    }
+                });
+
+                const main = document.querySelector('#main');
+                if (!main) {
+                    clearTimeout(timer);
+                    reject("Elemento #main não encontrado");
+                    return;
+                }
+
+                observer.observe(main, { childList: true, subtree: true });
+
+                if (mensagemJaEnviada(texto)) {
+                    clearTimeout(timer);
+                    observer.disconnect();
+                    resolve();
+                }
+            });
+        }
+
+        async function enviarMensagem(texto) {
+            if (bloqueioEnvioGlobal) throw new Error("Envio bloqueado");
+
+            bloqueioEnvioGlobal = true;
+
+            const inputBox = document.querySelector('div[contenteditable="true"][data-tab="10"]');
+            if (!inputBox) {
+                bloqueioEnvioGlobal = false;
+                throw new Error("Campo de texto não encontrado");
+            }
+
+            if (!limparInput()) {
+                bloqueioEnvioGlobal = false;
+                throw new Error("Falha ao limpar campo de texto");
+            }
+
+            await new Promise(r => setTimeout(r, 300));
+            document.execCommand('insertText', false, texto);
+            inputBox.dispatchEvent(new InputEvent("input", { bubbles: true }));
+
+            await new Promise(r => setTimeout(r, 600));
+
+            const botaoEnviar = document.querySelector('button[data-tab="11"][aria-label="Enviar"]');
+            if (!botaoEnviar) {
+                bloqueioEnvioGlobal = false;
+                throw new Error("Botão enviar não encontrado");
+            }
+
+            botaoEnviar.click();
+
+            try {
+                await esperarMensagemNoDOM(texto);
+            } catch (err) {
+                console.warn("Mensagem não detectada no DOM dentro do timeout, prosseguindo:", err);
+            }
+
+            await new Promise(r => setTimeout(r, 1500));
+
+            bloqueioEnvioGlobal = false;
+        }
+
+        async function verificarUltimaMensagem() {
+            const settings = DataManager.loadAll();
+            if (!settings.general.audioAutoReply) return; // Verifica se a auto-resposta de áudio está ativada
+
+            if (bloqueioEnvioGlobal) return;
+            if (debounceTimeout) return;
+
+            debounceTimeout = setTimeout(() => {
+                debounceTimeout = null;
+            }, 1500);
+
+            const mensagensAudio = Array.from(document.querySelectorAll("div.message-in")).filter(isAudioMessage);
+            if (mensagensAudio.length === 0) return;
+
+            const ultimaMsgAudio = mensagensAudio[mensagensAudio.length - 1];
+            if (!ultimaMsgAudio) return;
+
+            const idMsg = gerarIdUnico(ultimaMsgAudio);
+            if (!idMsg) return;
+
+            const historico = getHistoricoRespondidos();
+
+            if (historico.includes(idMsg)) return;
+
+            if (mensagemJaEnviada(MENSAGEM_AUDIO)) return;
+
+            historico.push(idMsg);
+            salvarHistoricoRespondidos(historico);
+
+            console.log(`✅ Áudio novo detectado. Respondendo mensagem com ID: ${idMsg}`);
+
+            try {
+                await enviarMensagem(MENSAGEM_AUDIO);
+            } catch (e) {
+                console.error("Erro no envio da auto-resposta de áudio:", e);
+            }
+        }
+
+        return {
+            start: () => {
+                if (!audioCheckInterval) {
+                    audioCheckInterval = setInterval(verificarUltimaMensagem, 2000);
+                    console.log('[WA MV] Auto-resposta de áudio iniciada.');
+                }
+            },
+            stop: () => {
+                if (audioCheckInterval) {
+                    clearInterval(audioCheckInterval);
+                    audioCheckInterval = null;
+                    console.log('[WA MV] Auto-resposta de áudio parada.');
+                }
+            },
+            checkStatus: () => !!audioCheckInterval
+        };
+    })();
+
+    // =================================================================================
+    // 6. MÓDULO DE INTERFACE DO USUÁRIO (UI)
     // =================================================================================
     const UIManager = {
         state: { settings: DataManager.loadAll() },
@@ -311,12 +497,10 @@
                 .mv-fab-container {
                     position: fixed;
                     right: 20px;
-                    /* bottom é controlado dinamicamente via JS */
                     z-index: 9999;
                     display: flex;
                     flex-direction: column-reverse;
                     gap: 12px;
-                    /* NOVO: transição para suavizar mudanças de posição e escala */
                     transform-origin: bottom right;
                     transition: bottom 0.3s ease, transform 0.3s ease;
                 }
@@ -787,7 +971,6 @@
                     border: 2px solid rgba(255,255,255,0.2);
                 }
 
-                /* NOVO: Estilos para os controles de layout */
                 .mv-layout-controls {
                     display: flex;
                     align-items: center;
@@ -843,10 +1026,20 @@
                     margin-left: 10px;
                 }
 
+                #mv-audio-status-icon {
+    position: fixed;
+    top: 70px; /* Altere de bottom para top */
+    right: 20px; /* Altere de left para right */
+    /* Remova 'bottom: 20px;' e 'left: 20px;' se existirem */
+    font-size: 30px;
+    z-index: 9999;
+    color: ${theme.accent};
+    text-shadow: 0 0 5px rgba(0,0,0,0.5);
+}
+
                 @media (max-width: 768px) {
                     .mv-fab-container {
                         right: 15px;
-                        /* bottom: 15px; */ /* Removido para controle dinâmico */
                         gap: 10px;
                     }
 
@@ -893,6 +1086,7 @@
                 <div class="mv-fab-container" id="mv-fab-container"></div>
                 <div id="mv-edge-hover-zone"></div>
                 <button id="mv-settings-btn" class="mv-fab mv-fab-settings">⚙️</button>
+                <div id="mv-audio-status-icon"></div> <!-- NOVO: Ícone de status do áudio -->
                 <div id="mv-modal-backdrop" class="mv-modal-backdrop"></div>
                 <div id="mv-modal" class="mv-modal">
                     <div class="mv-modal-header">
@@ -944,6 +1138,13 @@
                                 <label for="mv-animations-toggle" style="margin-bottom: 0;">Animações</label>
                                 <label class="mv-switch">
                                     <input type="checkbox" id="mv-animations-toggle">
+                                    <span class="mv-slider"></span>
+                                </label>
+                            </div>
+                            <div class="mv-form-group" style="display: flex; align-items: center; gap: 15px;">
+                                <label for="mv-audio-auto-reply-toggle" style="margin-bottom: 0;">Auto-resposta de áudio</label>
+                                <label class="mv-switch">
+                                    <input type="checkbox" id="mv-audio-auto-reply-toggle">
                                     <span class="mv-slider"></span>
                                 </label>
                             </div>
@@ -1145,7 +1346,6 @@
             const style = document.createElement('style');
             style.id = 'mv-custom-colors';
 
-            // Remove estilo anterior se existir
             const existingStyle = document.getElementById('mv-custom-colors');
             if (existingStyle) existingStyle.remove();
 
@@ -1198,13 +1398,11 @@
             return `rgba(${r}, ${g}, ${b}, ${alpha})`;
         },
 
-        // MELHORIA: Lógica de renderização com posicionamento correto do botão Reanimar
         renderFloatingButtons: () => {
             const container = document.getElementById('mv-fab-container');
             container.innerHTML = '';
             const { waitTimes, menu, customButtons, general, reanimate, quickReplies, layout } = UIManager.state.settings;
 
-            // NOVO: Aplica a posição e escala do layout
             container.style.bottom = `${layout.bottomOffset}px`;
             container.style.transform = `scale(${layout.scale})`;
 
@@ -1230,7 +1428,6 @@
             };
 
             const createReanimateButton = () => {
-                // Botão Reanimar sempre após os tempos de espera
                 const reanimateBtn = document.createElement('button');
                 reanimateBtn.className = 'mv-fab mv-fab-reanimate';
                 reanimateBtn.innerHTML = '🔥 Reanimar Cliente';
@@ -1244,7 +1441,6 @@
             };
 
             const createOtherButtons = () => {
-                // Respostas Rápidas
                 quickReplies.slice(0, 3).forEach(quick => {
                     const quickBtn = document.createElement('button');
                     quickBtn.className = 'mv-fab mv-fab-quick';
@@ -1257,7 +1453,6 @@
                     container.appendChild(quickBtn);
                 });
 
-                // Botão Cardápio
                 const menuBtn = document.createElement('button');
                 menuBtn.className = 'mv-fab mv-fab-menu';
                 menuBtn.innerHTML = '📋 Cardápio';
@@ -1270,7 +1465,6 @@
                 });
                 container.appendChild(menuBtn);
 
-                // Botões personalizados
                 customButtons.forEach(button => {
                     const btnEl = document.createElement('button');
                     btnEl.className = 'mv-fab';
@@ -1283,14 +1477,13 @@
                 });
             };
 
-            // ORDEM CORRETA: Outros botões -> Tempos de Espera -> Reanimar (sempre abaixo dos tempos)
             if (general.waitTimePosition === 'top') {
                 createOtherButtons();
                 createWaitButtons();
-                createReanimateButton(); // Sempre após os tempos
+                createReanimateButton();
             } else {
                 createWaitButtons();
-                createReanimateButton(); // Sempre após os tempos
+                createReanimateButton();
                 createOtherButtons();
             }
 
@@ -1298,28 +1491,23 @@
             UIManager.applyAutoHide();
         },
 
-
-
         renderListsInModal: () => {
-            // Configurações Gerais
             const general = UIManager.state.settings.general;
             document.getElementById('mv-auto-hide-toggle').checked = general.autoHide;
             document.getElementById('mv-auto-hide-duration').value = general.autoHideDuration;
             document.getElementById('mv-wait-time-position').value = general.waitTimePosition;
             document.getElementById('mv-sound-toggle').checked = general.soundEnabled;
             document.getElementById('mv-animations-toggle').checked = general.animationsEnabled;
+            document.getElementById('mv-audio-auto-reply-toggle').checked = general.audioAutoReply; // NOVO: Estado do toggle de áudio
 
-            // Cores
             const colors = UIManager.state.settings.colors;
             document.getElementById('mv-color-custom').value = colors.customButtons;
             document.getElementById('mv-color-wait').value = colors.waitButtons;
             document.getElementById('mv-color-menu').value = colors.menuButton;
             document.getElementById('mv-color-reanimate').value = colors.reanimateButton;
 
-            // Temas
             UIManager.renderThemes();
 
-            // Botões Personalizados
             const btnList = document.getElementById('mv-button-list');
             btnList.innerHTML = '';
             UIManager.state.settings.customButtons.forEach((button, index) => {
@@ -1342,7 +1530,6 @@
                 btnList.appendChild(li);
             });
 
-            // Respostas Rápidas
             const quickList = document.getElementById('mv-quick-list');
             quickList.innerHTML = '';
             UIManager.state.settings.quickReplies.forEach((quick, index) => {
@@ -1368,7 +1555,6 @@
                 quickList.appendChild(li);
             });
 
-            // Tempos de Espera
             const waitList = document.getElementById('mv-wait-list');
             waitList.innerHTML = '';
             UIManager.state.settings.waitTimes.forEach((timeObj, index) => {
@@ -1394,18 +1580,14 @@
                 waitList.appendChild(li);
             });
 
-            // Cardápio
             document.getElementById('mv-menu-text').value = UIManager.state.settings.menu.text;
             UIManager.renderImagePreviews();
 
-            // Reanimar
             document.getElementById('mv-reanimate-text').value = UIManager.state.settings.reanimate.text;
             UIManager.renderReanimatePreview();
 
-            // Estatísticas
             UIManager.renderStats();
 
-            // NOVO: Layout
             document.getElementById('mv-layout-scale').value = UIManager.state.settings.layout.scale;
             document.getElementById('mv-layout-scale-value').textContent = `${Math.round(UIManager.state.settings.layout.scale * 100)}%`;
         },
@@ -1441,7 +1623,6 @@
                 themeItem.addEventListener('click', () => {
                     UIManager.state.settings.general.currentTheme = key;
                     UIManager.renderThemes();
-                    // Recarrega os estilos com o novo tema
                     const existingStyle = document.querySelector('style');
                     if (existingStyle) existingStyle.remove();
                     UIManager.injectStyles();
@@ -1541,6 +1722,17 @@
             }
         },
 
+        updateAudioStatusIcon: () => {
+            const iconElement = document.getElementById('mv-audio-status-icon');
+            if (AudioAutoReply.checkStatus()) {
+                iconElement.innerHTML = '🔊'; // Som ativo
+                iconElement.title = 'Auto-resposta de áudio ATIVA';
+            } else {
+                iconElement.innerHTML = '🔇'; // Som desativado
+                iconElement.title = 'Auto-resposta de áudio INATIVA';
+            }
+        },
+
         showEditModal: (index = null) => {
             const isAdding = index === null;
             const modal = document.getElementById('mv-edit-modal');
@@ -1600,30 +1792,32 @@
         },
 
         saveAndClose: () => {
-            // Salva configurações gerais
             UIManager.state.settings.general.autoHide = document.getElementById('mv-auto-hide-toggle').checked;
             UIManager.state.settings.general.autoHideDuration = parseInt(document.getElementById('mv-auto-hide-duration').value);
             UIManager.state.settings.general.waitTimePosition = document.getElementById('mv-wait-time-position').value;
             UIManager.state.settings.general.soundEnabled = document.getElementById('mv-sound-toggle').checked;
             UIManager.state.settings.general.animationsEnabled = document.getElementById('mv-animations-toggle').checked;
+            UIManager.state.settings.general.audioAutoReply = document.getElementById('mv-audio-auto-reply-toggle').checked; // NOVO: Salva estado do toggle de áudio
 
-            // Salva cores
+            if (UIManager.state.settings.general.audioAutoReply) {
+                AudioAutoReply.start();
+            } else {
+                AudioAutoReply.stop();
+            }
+            UIManager.updateAudioStatusIcon(); // Atualiza o ícone imediatamente
+
             UIManager.state.settings.colors.customButtons = document.getElementById('mv-color-custom').value;
             UIManager.state.settings.colors.waitButtons = document.getElementById('mv-color-wait').value;
             UIManager.state.settings.colors.menuButton = document.getElementById('mv-color-menu').value;
             UIManager.state.settings.colors.reanimateButton = document.getElementById('mv-color-reanimate').value;
 
-            // Salva cardápio
             UIManager.state.settings.menu.text = document.getElementById('mv-menu-text').value;
 
-            // Salva reanimar
             UIManager.state.settings.reanimate.text = document.getElementById('mv-reanimate-text').value;
 
-            // Salva layout
             UIManager.state.settings.layout.bottomOffset = parseInt(document.getElementById('mv-fab-container').style.bottom) || CONFIG.defaultLayout.bottomOffset;
             UIManager.state.settings.layout.scale = parseFloat(document.getElementById('mv-fab-container').style.transform.replace('scale(', '').replace(')', '')) || CONFIG.defaultLayout.scale;
 
-            // Salva no LocalStorage
             DataManager.set('general', UIManager.state.settings.general);
             DataManager.set('colors', UIManager.state.settings.colors);
             DataManager.set('customButtons', UIManager.state.settings.customButtons);
@@ -1633,10 +1827,8 @@
             DataManager.set('reanimate', UIManager.state.settings.reanimate);
             DataManager.set('layout', UIManager.state.settings.layout);
 
-            // Re-renderiza a UI principal
             UIManager.renderFloatingButtons();
 
-            // Fecha o modal
             document.getElementById('mv-modal-backdrop').style.display = 'none';
             document.getElementById('mv-modal').style.display = 'none';
         },
@@ -1667,17 +1859,14 @@
         },
 
         initEventListeners: () => {
-            // Botão de configurações
             document.getElementById('mv-settings-btn').addEventListener('click', () => {
                 document.getElementById('mv-modal-backdrop').style.display = 'block';
                 document.getElementById('mv-modal').style.display = 'flex';
                 UIManager.renderListsInModal();
             });
 
-            // Fechar modal principal
             document.getElementById('mv-modal-close-btn').addEventListener('click', UIManager.saveAndClose);
 
-            // Navegação entre abas
             document.querySelectorAll('.mv-tab-btn').forEach(btn => {
                 btn.addEventListener('click', e => {
                     document.querySelectorAll('.mv-tab-btn, .mv-tab-content').forEach(el => el.classList.remove('active'));
@@ -1686,7 +1875,6 @@
                 });
             });
 
-            // Botões de reset de cores
             document.getElementById('mv-reset-color-custom').addEventListener('click', () => {
                 document.getElementById('mv-color-custom').value = CONFIG.defaultColors.customButtons;
             });
@@ -1700,13 +1888,10 @@
                 document.getElementById('mv-color-reanimate').value = CONFIG.defaultColors.reanimateButton;
             });
 
-            // Adicionar botão personalizado
             document.getElementById('mv-add-button-btn').addEventListener('click', () => UIManager.showEditModal(null));
 
-            // Adicionar resposta rápida
             document.getElementById('mv-add-quick-btn').addEventListener('click', () => UIManager.showQuickEditModal(null));
 
-            // Salvar/cancelar edição de botão
             document.getElementById('mv-edit-save').addEventListener('click', () => {
                 const index = document.getElementById('mv-edit-id').value;
                 const name = document.getElementById('mv-edit-name').value.trim();
@@ -1718,14 +1903,12 @@
                 }
 
                 if (index === '') {
-                    // Adicionar novo
                     UIManager.state.settings.customButtons.push({
                         id: `btn_${Date.now()}`,
                         name,
                         message
                     });
                 } else {
-                    // Editar existente
                     UIManager.state.settings.customButtons[index] = {
                         ...UIManager.state.settings.customButtons[index],
                         name,
@@ -1739,10 +1922,8 @@
 
             document.getElementById('mv-edit-cancel').addEventListener('click', UIManager.hideEditModal);
 
-            // Adicionar tempo de espera
             document.getElementById('mv-add-wait-btn').addEventListener('click', () => UIManager.showWaitEditModal(null));
 
-            // Salvar/cancelar edição de tempo
             document.getElementById('mv-wait-edit-save').addEventListener('click', () => {
                 const index = document.getElementById('mv-wait-edit-id').value;
                 const text = document.getElementById('mv-wait-edit-text').value.trim();
@@ -1754,10 +1935,8 @@
                 }
 
                 if (index === '') {
-                    // Adicionar novo
                     UIManager.state.settings.waitTimes.push({ text, message });
                 } else {
-                    // Editar existente
                     UIManager.state.settings.waitTimes[index] = { text, message };
                 }
 
@@ -1767,7 +1946,6 @@
 
             document.getElementById('mv-wait-edit-cancel').addEventListener('click', UIManager.hideEditModal);
 
-            // Salvar/cancelar edição de resposta rápida
             document.getElementById('mv-quick-edit-save').addEventListener('click', () => {
                 const index = document.getElementById('mv-quick-edit-id').value;
                 const text = document.getElementById('mv-quick-edit-text').value.trim();
@@ -1779,10 +1957,8 @@
                 }
 
                 if (index === '') {
-                    // Adicionar novo
                     UIManager.state.settings.quickReplies.push({ text, message });
                 } else {
-                    // Editar existente
                     UIManager.state.settings.quickReplies[index] = { text, message };
                 }
 
@@ -1792,7 +1968,6 @@
 
             document.getElementById('mv-quick-edit-cancel').addEventListener('click', UIManager.hideEditModal);
 
-            // Upload de imagens do cardápio
             document.getElementById('mv-menu-images-btn').addEventListener('click', () => {
                 document.getElementById('mv-menu-images-input').click();
             });
@@ -1815,11 +1990,9 @@
                     reader.readAsDataURL(file);
                 });
 
-                // Limpa o input
                 e.target.value = '';
             });
 
-            // Upload de imagem de reanimação
             document.getElementById('mv-reanimate-image-btn').addEventListener('click', () => {
                 document.getElementById('mv-reanimate-image-input').click();
             });
@@ -1835,16 +2008,13 @@
                     reader.readAsDataURL(file);
                 }
 
-                // Limpa o input
                 e.target.value = '';
             });
 
-            // Funcionalidades de backup
             document.getElementById('mv-export-btn').addEventListener('click', () => {
                 const exportData = DataManager.exportSettings();
                 document.getElementById('mv-backup-text').value = exportData;
 
-                // Download automático
                 const blob = new Blob([exportData], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -1875,7 +2045,6 @@
                 e.target.value = '';
             });
 
-            // Limpar estatísticas
             document.getElementById('mv-reset-stats-btn').addEventListener('click', () => {
                 if (confirm('Tem certeza que deseja limpar todas as estatísticas? Esta ação não pode ser desfeita.')) {
                     DataManager.set('statistics', {
@@ -1891,10 +2060,8 @@
                 }
             });
 
-            // Zona de hover para mostrar botões
             document.getElementById('mv-edge-hover-zone').addEventListener('mouseenter', UIManager.showButtonsTemporarily);
 
-            // Fechar modal clicando no backdrop
             document.getElementById('mv-modal-backdrop').addEventListener('click', (e) => {
                 if (e.target === e.currentTarget) {
                     const mainModal = document.getElementById('mv-modal');
@@ -1910,16 +2077,15 @@
                 }
             });
 
-            // NOVO: Event Listeners para Layout
             document.getElementById('mv-layout-pos-up').addEventListener('click', () => {
                 let currentBottom = parseInt(document.getElementById('mv-fab-container').style.bottom) || CONFIG.defaultLayout.bottomOffset;
-                currentBottom += 10; // Move 10px para cima
+                currentBottom += 10;
                 document.getElementById('mv-fab-container').style.bottom = `${currentBottom}px`;
             });
 
             document.getElementById('mv-layout-pos-down').addEventListener('click', () => {
                 let currentBottom = parseInt(document.getElementById('mv-fab-container').style.bottom) || CONFIG.defaultLayout.bottomOffset;
-                currentBottom = Math.max(0, currentBottom - 10); // Move 10px para baixo, mínimo 0
+                currentBottom = Math.max(0, currentBottom - 10);
                 document.getElementById('mv-fab-container').style.bottom = `${currentBottom}px`;
             });
 
@@ -1938,27 +2104,44 @@
                 document.getElementById('mv-fab-container').style.transform = `scale(${CONFIG.defaultLayout.scale})`;
                 document.getElementById('mv-layout-scale-value').textContent = `${Math.round(CONFIG.defaultLayout.scale * 100)}%`;
             });
+
+            // NOVO: Event Listener para o toggle de auto-resposta de áudio
+            document.getElementById('mv-audio-auto-reply-toggle').addEventListener('change', (e) => {
+                UIManager.state.settings.general.audioAutoReply = e.target.checked;
+                if (e.target.checked) {
+                    AudioAutoReply.start();
+                } else {
+                    AudioAutoReply.stop();
+                }
+                UIManager.updateAudioStatusIcon();
+            });
         },
 
         init: function() {
             if (document.getElementById(CONFIG.containerId)) return;
 
-            console.log('[WA MV] UI v5.3 com ajustes de Layout injetada.');
+            console.log('[WA MV] UI v5.4 com ajustes de Layout e Áudio Integrado injetada.');
             this.injectStyles();
             this.createDOM();
             this.renderFloatingButtons();
             this.initEventListeners();
+            this.updateAudioStatusIcon(); // Inicializa o ícone de status do áudio
+
+            // Inicia a auto-resposta de áudio se estiver ativada nas configurações
+            if (this.state.settings.general.audioAutoReply) {
+                AudioAutoReply.start();
+            }
         }
     };
 
     // =================================================================================
-    // 6. INICIALIZAÇÃO DO SCRIPT
+    // 7. INICIALIZAÇÃO DO SCRIPT
     // =================================================================================
-    console.log('[WA MV] Script v5.3 com ajustes de Layout carregado. Observando o DOM...');
+    console.log('[WA MV] Script v5.4 com ajustes de Layout e Áudio Integrado carregado. Observando o DOM...');
 
     const observer = new MutationObserver((mutations, obs) => {
         if (document.querySelector(CONFIG.selectors.app)) {
-            console.log('[WA MV] Elemento #app encontrado. Iniciando a UI com ajustes.');
+            console.log('[WA MV] Elemento #app encontrado. Iniciando a UI com ajustes e áudio.');
             UIManager.init();
             obs.disconnect();
         }
@@ -1967,3 +2150,4 @@
     observer.observe(document.body, { childList: true, subtree: true });
 
 })();
+
