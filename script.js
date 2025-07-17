@@ -247,21 +247,35 @@
             }
         },
 
-        sendText: async (message) => {
-            try {
-                const chatBox = await WhatsAppActions.waitForElement(CONFIG.selectors.chatBox);
-                chatBox.focus();
-                document.execCommand('insertText', false, message);
-                chatBox.dispatchEvent(new Event('input', { bubbles: true }));
-                const sendButton = await WhatsAppActions.waitForElement(CONFIG.selectors.sendButton);
-                sendButton.click();
-                WhatsAppActions.playSound();
-                return true;
-            } catch (error) {
-                alert(`[WA MV] Erro ao enviar mensagem: ${error.message}\n\nPor favor, abra uma conversa antes de usar os botões.`);
-                return false;
-            }
-        },
+       sendText: async (message) => {
+    try {
+        const chatBox = await WhatsAppActions.waitForElement(CONFIG.selectors.chatBox);
+        chatBox.focus();
+
+        const dataTransfer = new DataTransfer();
+        dataTransfer.setData('text/plain', message);
+
+        const pasteEvent = new ClipboardEvent('paste', {
+            clipboardData: dataTransfer,
+            bubbles: true
+        });
+
+        chatBox.dispatchEvent(pasteEvent);
+
+        // Aguarda um pouco para garantir que o texto foi colado
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        const sendButton = await WhatsAppActions.waitForElement(CONFIG.selectors.sendButton);
+        sendButton.click();
+
+        WhatsAppActions.playSound();
+        return true;
+    } catch (error) {
+        alert(`[WA MV] Erro ao enviar mensagem: ${error.message}\n\nPor favor, abra uma conversa antes de usar os botões.`);
+        return false;
+    }
+}
+,
 
         sendImage: async (base64Image) => {
             try {
