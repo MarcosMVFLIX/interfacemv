@@ -2187,35 +2187,57 @@ function setupEdgeHover() {
 
     // ---
 
-// Funções de Backup e Restauração (somente chaves MV*)
+// Lista de palavras-chave para ignorar dados sensíveis do WhatsApp Web
+const ignoreKeysWith = [
+    'WAWebID',
+    'WebEncKey',
+    'WebEncKeySalt',
+    'WANoiseInfo',
+    'Session',
+    'Auth',
+    'Token',
+    'WACachedProfile',
+    'WAMms4Conn',
+    'WAWebTimeSpentSession',
+    'WASyncd',
+    'Login',
+    'Signal',
+    'certificate',
+    'mutex-ping',
+    'unifiedSessionId'
+];
+
+// Backup seguro (ignora dados sensíveis do WhatsApp)
 function backupLocalStorage() {
     try {
-        const mvItems = {};
+        const safeItems = {};
+
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
-            if (key.startsWith('MV')) {
-                mvItems[key] = localStorage.getItem(key);
+            if (!ignoreKeysWith.some(prefix => key.includes(prefix))) {
+                safeItems[key] = localStorage.getItem(key);
             }
         }
-        const backupData = JSON.stringify(mvItems, null, 2);
 
+        const backupData = JSON.stringify(safeItems, null, 2);
         const blob = new Blob([backupData], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'localStorage_MV_backup_' + new Date().toISOString().slice(0, 10) + '.json';
+        a.download = 'localStorage_backup_safe_' + new Date().toISOString().slice(0, 10) + '.json';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        alert('Backup das chaves MV* gerado com sucesso! Verifique seus downloads.');
+        alert('Backup seguro gerado com sucesso! Verifique seus downloads.');
     } catch (error) {
         console.error('Erro ao fazer backup do LocalStorage:', error);
-        alert('Erro ao fazer backup do LocalStorage. Verifique o console para detalhes.');
+        alert('Erro ao fazer backup do LocalStorage. Veja o console para detalhes.');
     }
 }
 
+// Restauração segura (ignora dados sensíveis do WhatsApp)
 function restoreLocalStorage() {
     const input = document.createElement('input');
     input.type = 'file';
@@ -2224,9 +2246,7 @@ function restoreLocalStorage() {
 
     input.onchange = function (e) {
         const file = e.target.files[0];
-        if (!file) {
-            return;
-        }
+        if (!file) return;
 
         const reader = new FileReader();
         reader.onload = function (event) {
@@ -2234,36 +2254,26 @@ function restoreLocalStorage() {
                 const restoredData = JSON.parse(event.target.result);
 
                 const confirmRestore = confirm(
-                    'Tem certeza que deseja restaurar as chaves MV*? Isso irá sobrescrever as atuais.'
+                    'Deseja restaurar os dados da interface? Dados sensíveis do WhatsApp serão ignorados.'
                 );
 
                 if (confirmRestore) {
-                    // Remove apenas chaves MV* existentes
-                    const keysToRemove = [];
-                    for (let i = 0; i < localStorage.length; i++) {
-                        const key = localStorage.key(i);
-                        if (key.startsWith('MV')) {
-                            keysToRemove.push(key);
-                        }
-                    }
-                    keysToRemove.forEach(k => localStorage.removeItem(k));
-
-                    // Grava as do backup
                     let count = 0;
                     for (const key in restoredData) {
-                        if (restoredData.hasOwnProperty(key) && key.startsWith('MV')) {
+                        if (!ignoreKeysWith.some(prefix => key.includes(prefix))) {
                             localStorage.setItem(key, restoredData[key]);
                             count++;
                         }
                     }
 
-                    alert(`Restauradas ${count} chaves MV* com sucesso! Recarregue a página.`);
+                    alert(`Restauradas ${count} chaves com segurança! Recarregue a página.`);
                 }
             } catch (error) {
                 console.error('Erro ao restaurar LocalStorage:', error);
-                alert('Erro ao restaurar o LocalStorage. Verifique se o arquivo é um JSON válido. Detalhes no console.');
+                alert('Erro ao restaurar. Verifique se o arquivo é um JSON válido.');
             }
         };
+
         reader.readAsText(file);
         document.body.removeChild(input);
     };
@@ -2272,7 +2282,6 @@ function restoreLocalStorage() {
     input.click();
 }
 
-// ---
 
 // Atalhos de teclado
 document.addEventListener('keydown', function (event) {
