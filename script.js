@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         WhatsApp Automation MV (v5.2 - UI Ajustado)
+// @name         WhatsApp Automation MV (v5.3 - Layout Personalizável)
 // @namespace    http://tampermonkey.net/
-// @version      5.2
-// @description  Versão com ajustes de UI: barra de rolagem maior e posicionamento correto do botão Reanimar
-// @author       Manus AI Assistant
+// @version      5.3
+// @description  Versão com personalização de posição e tamanho dos botões flutuantes.
+// @author       Manus AI Assistant & [Seu Nome]
 // @match        https://web.whatsapp.com/*
 // @grant        none
 // @run-at       document-end
@@ -29,6 +29,11 @@
             waitButtons: '#6c757d',
             reanimateButton: '#ff6b35',
             menuButton: '#25d366'
+        },
+        // NOVO: Configurações padrão de layout
+        defaultLayout: {
+            bottomOffset: 20, // Posição vertical inicial em pixels
+            scale: 1.0 // Escala inicial (1.0 = 100%)
         },
         themes: {
             default: {
@@ -94,6 +99,8 @@
                     image: null
                 }),
                 colors: this.get('colors', CONFIG.defaultColors),
+                // NOVO: Carrega as configurações de layout
+                layout: this.get('layout', CONFIG.defaultLayout),
                 general: this.get('general', {
                     autoHide: false,
                     autoHideDuration: 10,
@@ -121,7 +128,7 @@
         exportSettings: function() {
             const settings = this.loadAll();
             const exportData = {
-                version: '5.2',
+                version: '5.3', // Versão atualizada
                 timestamp: new Date().toISOString(),
                 settings: settings
             };
@@ -222,7 +229,6 @@
         playSound: () => {
             const settings = DataManager.loadAll();
             if (settings.general.soundEnabled) {
-                // Som de notificação simples
                 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const oscillator = audioContext.createOscillator();
                 const gainNode = audioContext.createGain();
@@ -305,11 +311,14 @@
                 .mv-fab-container {
                     position: fixed;
                     right: 20px;
-                    bottom: 20px;
+                    /* bottom é controlado dinamicamente via JS */
                     z-index: 9999;
                     display: flex;
                     flex-direction: column-reverse;
                     gap: 12px;
+                    /* NOVO: transição para suavizar mudanças de posição e escala */
+                    transform-origin: bottom right;
+                    transition: bottom 0.3s ease, transform 0.3s ease;
                 }
 
                 .mv-fab {
@@ -474,7 +483,6 @@
                     flex-grow: 1;
                 }
 
-                /* MELHORIA: Barra de rolagem mais visível e maior */
                 .mv-modal-body::-webkit-scrollbar {
                     width: 16px;
                 }
@@ -779,10 +787,66 @@
                     border: 2px solid rgba(255,255,255,0.2);
                 }
 
+                /* NOVO: Estilos para os controles de layout */
+                .mv-layout-controls {
+                    display: flex;
+                    align-items: center;
+                    gap: 20px;
+                    margin-bottom: 1.5rem;
+                }
+                .mv-position-control button {
+                    background: ${theme.secondary};
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    padding: 10px 15px;
+                    font-size: 20px;
+                    cursor: pointer;
+                    transition: background-color 0.2s;
+                }
+                .mv-position-control button:hover {
+                    background: ${UIManager.darkenColor(theme.secondary, 10)};
+                }
+                .mv-scale-control {
+                    flex-grow: 1;
+                }
+                .mv-scale-control input[type="range"] {
+                    width: 100%;
+                    padding: 0;
+                    -webkit-appearance: none;
+                    height: 8px;
+                    background: #54656f;
+                    border-radius: 5px;
+                    outline: none;
+                    opacity: 0.7;
+                    transition: opacity .2s;
+                }
+                .mv-scale-control input[type="range"]::-webkit-slider-thumb {
+                    -webkit-appearance: none;
+                    appearance: none;
+                    width: 20px;
+                    height: 20px;
+                    border-radius: 50%;
+                    background: ${theme.secondary};
+                    cursor: pointer;
+                }
+                .mv-scale-control input[type="range"]::-moz-range-thumb {
+                    width: 20px;
+                    height: 20px;
+                    border-radius: 50%;
+                    background: ${theme.secondary};
+                    cursor: pointer;
+                }
+                #mv-layout-scale-value {
+                    font-weight: bold;
+                    color: ${theme.accent};
+                    margin-left: 10px;
+                }
+
                 @media (max-width: 768px) {
                     .mv-fab-container {
                         right: 15px;
-                        bottom: 15px;
+                        /* bottom: 15px; */ /* Removido para controle dinâmico */
                         gap: 10px;
                     }
 
@@ -822,8 +886,6 @@
             document.head.appendChild(style);
         },
 
-
-
         createDOM: () => {
             const container = document.createElement('div');
             container.id = CONFIG.containerId;
@@ -839,13 +901,14 @@
                     <div class="mv-modal-body">
                         <div class="mv-tab-container">
                             <button class="mv-tab-btn active" data-tab="tab-general">🔧 Geral</button>
-                            <button class="mv-tab-btn" data-tab="tab-colors">🎨 Cores</button>
-                            <button class="mv-tab-btn" data-tab="tab-themes">🌈 Temas</button>
+                            <button class="mv-tab-btn" data-tab="tab-layout">📐 Layout</button>
+                            <button class="mv-tab-btn" data-tab="tab-menu">📋 Cardápio</button>
                             <button class="mv-tab-btn" data-tab="tab-buttons">🔘 Botões</button>
                             <button class="mv-tab-btn" data-tab="tab-quick">⚡ Rápidas</button>
-                            <button class="mv-tab-btn" data-tab="tab-menu">📋 Cardápio</button>
                             <button class="mv-tab-btn" data-tab="tab-wait">⏰ Tempos</button>
                             <button class="mv-tab-btn" data-tab="tab-reanimate">🔥 Reanimar</button>
+                            <button class="mv-tab-btn" data-tab="tab-colors">🎨 Cores</button>
+                            <button class="mv-tab-btn" data-tab="tab-themes">🌈 Temas</button>
                             <button class="mv-tab-btn" data-tab="tab-stats">📊 Estatísticas</button>
                             <button class="mv-tab-btn" data-tab="tab-backup">💾 Backup</button>
                         </div>
@@ -984,6 +1047,27 @@
                                 <textarea id="mv-backup-text" rows="8" readonly placeholder="Os dados de backup aparecerão aqui..."></textarea>
                             </div>
                         </div>
+
+                        <div id="tab-layout" class="mv-tab-content">
+                            <h4>📐 Personalização de Layout</h4>
+                            <p style="color: #8696a0; margin-bottom: 1rem;">Ajuste a posição vertical e o tamanho dos botões flutuantes.</p>
+                            <div class="mv-form-group">
+                                <label>Posição Vertical</label>
+                                <div class="mv-layout-controls mv-position-control">
+                                    <button id="mv-layout-pos-up">▲</button>
+                                    <button id="mv-layout-pos-down">▼</button>
+                                    <button id="mv-layout-reset-pos" class="mv-modal-btn" style="padding: 8px 12px; font-size: 12px;">Resetar Posição</button>
+                                </div>
+                            </div>
+                            <div class="mv-form-group">
+                                <label>Tamanho dos Botões (<span id="mv-layout-scale-value">100%</span>)</label>
+                                <div class="mv-layout-controls mv-scale-control">
+                                    <input type="range" id="mv-layout-scale" min="0.5" max="1.5" step="0.05">
+                                    <button id="mv-layout-reset-scale" class="mv-modal-btn" style="padding: 8px 12px; font-size: 12px;">Resetar Tamanho</button>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                     <div class="mv-modal-footer">
                         <button id="mv-modal-close-btn" class="mv-modal-btn">💾 Salvar e Fechar</button>
@@ -1118,7 +1202,11 @@
         renderFloatingButtons: () => {
             const container = document.getElementById('mv-fab-container');
             container.innerHTML = '';
-            const { waitTimes, menu, customButtons, general, reanimate, quickReplies } = UIManager.state.settings;
+            const { waitTimes, menu, customButtons, general, reanimate, quickReplies, layout } = UIManager.state.settings;
+
+            // NOVO: Aplica a posição e escala do layout
+            container.style.bottom = `${layout.bottomOffset}px`;
+            container.style.transform = `scale(${layout.scale})`;
 
             const createWaitButtons = () => {
                 if (waitTimes.length > 0) {
@@ -1316,6 +1404,10 @@
 
             // Estatísticas
             UIManager.renderStats();
+
+            // NOVO: Layout
+            document.getElementById('mv-layout-scale').value = UIManager.state.settings.layout.scale;
+            document.getElementById('mv-layout-scale-value').textContent = `${Math.round(UIManager.state.settings.layout.scale * 100)}%`;
         },
 
         renderThemes: () => {
@@ -1527,6 +1619,10 @@
             // Salva reanimar
             UIManager.state.settings.reanimate.text = document.getElementById('mv-reanimate-text').value;
 
+            // Salva layout
+            UIManager.state.settings.layout.bottomOffset = parseInt(document.getElementById('mv-fab-container').style.bottom) || CONFIG.defaultLayout.bottomOffset;
+            UIManager.state.settings.layout.scale = parseFloat(document.getElementById('mv-fab-container').style.transform.replace('scale(', '').replace(')', '')) || CONFIG.defaultLayout.scale;
+
             // Salva no LocalStorage
             DataManager.set('general', UIManager.state.settings.general);
             DataManager.set('colors', UIManager.state.settings.colors);
@@ -1535,6 +1631,7 @@
             DataManager.set('quickReplies', UIManager.state.settings.quickReplies);
             DataManager.set('menu', UIManager.state.settings.menu);
             DataManager.set('reanimate', UIManager.state.settings.reanimate);
+            DataManager.set('layout', UIManager.state.settings.layout);
 
             // Re-renderiza a UI principal
             UIManager.renderFloatingButtons();
@@ -1812,12 +1909,41 @@
                     }
                 }
             });
+
+            // NOVO: Event Listeners para Layout
+            document.getElementById('mv-layout-pos-up').addEventListener('click', () => {
+                let currentBottom = parseInt(document.getElementById('mv-fab-container').style.bottom) || CONFIG.defaultLayout.bottomOffset;
+                currentBottom += 10; // Move 10px para cima
+                document.getElementById('mv-fab-container').style.bottom = `${currentBottom}px`;
+            });
+
+            document.getElementById('mv-layout-pos-down').addEventListener('click', () => {
+                let currentBottom = parseInt(document.getElementById('mv-fab-container').style.bottom) || CONFIG.defaultLayout.bottomOffset;
+                currentBottom = Math.max(0, currentBottom - 10); // Move 10px para baixo, mínimo 0
+                document.getElementById('mv-fab-container').style.bottom = `${currentBottom}px`;
+            });
+
+            document.getElementById('mv-layout-reset-pos').addEventListener('click', () => {
+                document.getElementById('mv-fab-container').style.bottom = `${CONFIG.defaultLayout.bottomOffset}px`;
+            });
+
+            document.getElementById('mv-layout-scale').addEventListener('input', (e) => {
+                const scaleValue = parseFloat(e.target.value);
+                document.getElementById('mv-fab-container').style.transform = `scale(${scaleValue})`;
+                document.getElementById('mv-layout-scale-value').textContent = `${Math.round(scaleValue * 100)}%`;
+            });
+
+            document.getElementById('mv-layout-reset-scale').addEventListener('click', () => {
+                document.getElementById('mv-layout-scale').value = CONFIG.defaultLayout.scale;
+                document.getElementById('mv-fab-container').style.transform = `scale(${CONFIG.defaultLayout.scale})`;
+                document.getElementById('mv-layout-scale-value').textContent = `${Math.round(CONFIG.defaultLayout.scale * 100)}%`;
+            });
         },
 
         init: function() {
             if (document.getElementById(CONFIG.containerId)) return;
 
-            console.log('[WA MV] UI v5.2 com ajustes de UI injetada.');
+            console.log('[WA MV] UI v5.3 com ajustes de Layout injetada.');
             this.injectStyles();
             this.createDOM();
             this.renderFloatingButtons();
@@ -1828,7 +1954,7 @@
     // =================================================================================
     // 6. INICIALIZAÇÃO DO SCRIPT
     // =================================================================================
-    console.log('[WA MV] Script v5.2 com ajustes de UI carregado. Observando o DOM...');
+    console.log('[WA MV] Script v5.3 com ajustes de Layout carregado. Observando o DOM...');
 
     const observer = new MutationObserver((mutations, obs) => {
         if (document.querySelector(CONFIG.selectors.app)) {
@@ -1841,4 +1967,3 @@
     observer.observe(document.body, { childList: true, subtree: true });
 
 })();
-
