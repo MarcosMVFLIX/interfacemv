@@ -336,7 +336,7 @@
         const RESPONDIDOS_AUDIO_KEY = "msgs_audio_respondidas_ids";
         const MENSAGEM_AUDIO = "🔇 Olá! Não consigo ouvir áudios no momento. Por favor, envie sua mensagem por texto. 💬";
 
-        let bloqueioEnvioGlobal = false;
+        let audioBloqueioEnvio = false;
         let debounceTimeout;
         let audioCheckInterval;
 
@@ -421,30 +421,30 @@
         }
 
         async function enviarMensagem(texto) {
-            if (bloqueioEnvioGlobal) throw new Error("Envio bloqueado");
+            if (audioBloqueioEnvio) throw new Error("Envio bloqueado");
 
-            bloqueioEnvioGlobal = true;
+            audioBloqueioEnvio = true;
 
-            const inputBox = document.querySelector('div[contenteditable="true"][data-tab="10"]');
+            const inputBox = document.querySelector("div[contenteditable=\"true\"][data-tab=\"10\"]");
             if (!inputBox) {
-                bloqueioEnvioGlobal = false;
+                audioBloqueioEnvio = false;
                 throw new Error("Campo de texto não encontrado");
             }
 
             if (!limparInput()) {
-                bloqueioEnvioGlobal = false;
+                audioBloqueioEnvio = false;
                 throw new Error("Falha ao limpar campo de texto");
             }
 
             await new Promise(r => setTimeout(r, 300));
-            document.execCommand('insertText', false, texto);
+            document.execCommand("insertText", false, texto);
             inputBox.dispatchEvent(new InputEvent("input", { bubbles: true }));
 
             await new Promise(r => setTimeout(r, 600));
 
-            const botaoEnviar = document.querySelector('button[data-tab="11"][aria-label="Enviar"]');
+            const botaoEnviar = document.querySelector("button[data-tab=\"11\"][aria-label=\"Enviar\"]");
             if (!botaoEnviar) {
-                bloqueioEnvioGlobal = false;
+                audioBloqueioEnvio = false;
                 throw new Error("Botão enviar não encontrado");
             }
 
@@ -458,14 +458,14 @@
 
             await new Promise(r => setTimeout(r, 1500));
 
-            bloqueioEnvioGlobal = false;
+            audioBloqueioEnvio = false;
         }
 
         async function verificarUltimaMensagem() {
             const settings = DataManager.loadAll();
             if (!settings.general.audioAutoReply) return; // Verifica se a auto-resposta de áudio está ativada
 
-            if (bloqueioEnvioGlobal) return;
+            if (audioBloqueioEnvio) return;
             if (debounceTimeout) return;
 
             debounceTimeout = setTimeout(() => {
@@ -522,7 +522,7 @@
     // =================================================================================
     const PixAutoReply = (() => {
         const RESPONDIDOS_PIX_KEY = "msgs_pix_respondidas_ids";
-        let bloqueioEnvioGlobal = false;
+        let pixBloqueioEnvio = false;
         let debounceTimeout;
         let pixCheckInterval;
 
@@ -552,19 +552,45 @@
         }
 
         async function enviarMensagem(texto) {
-            if (bloqueioEnvioGlobal) throw new Error("Envio bloqueado");
+            if (pixBloqueioEnvio) throw new Error("Envio bloqueado");
 
-            bloqueioEnvioGlobal = true;
+            pixBloqueioEnvio = true;
 
             try {
-                const success = await WhatsAppActions.sendText(texto);
-                if (!success) {
-                    throw new Error("Falha ao enviar mensagem");
+                const inputBox = document.querySelector("div[contenteditable=\"true\"][data-tab=\"10\"]");
+                if (!inputBox) {
+                    throw new Error("Campo de texto não encontrado");
                 }
+
+                // Limpa o campo de entrada
+                inputBox.focus();
+                document.execCommand('selectAll', false, null);
+                document.execCommand('delete');
+
+                await new Promise(r => setTimeout(r, 300));
+
+                // Insere o texto
+                document.execCommand("insertText", false, texto);
+                inputBox.dispatchEvent(new InputEvent("input", { bubbles: true }));
+
+                await new Promise(r => setTimeout(r, 600));
+
+                // Encontra e clica no botão de envio
+                const botaoEnviar = document.querySelector("button[data-tab=\"11\"][aria-label=\"Enviar\"]");
+                if (!botaoEnviar) {
+                    throw new Error("Botão enviar não encontrado");
+                }
+
+                botaoEnviar.click();
+
+                // Aguarda um pouco para garantir que a mensagem foi enviada
+                await new Promise(r => setTimeout(r, 1500));
+
             } finally {
+                // Libera o bloqueio após um pequeno atraso
                 setTimeout(() => {
-                    bloqueioEnvioGlobal = false;
-                }, 2000);
+                    pixBloqueioEnvio = false;
+                }, 500); // Reduzido para 500ms
             }
         }
 
@@ -572,7 +598,7 @@
             const settings = DataManager.loadAll();
             if (!settings.general.pixAutoReply) return;
 
-            if (bloqueioEnvioGlobal) return;
+            if (pixBloqueioEnvio) return;
             if (debounceTimeout) return;
 
             debounceTimeout = setTimeout(() => {
@@ -596,15 +622,16 @@
 
             const mensagemResposta = settings.general.pixAutoReplyMessage;
 
-            // REMOVIDO: Verificação se mensagem já foi enviada
-            // Agora responde a cada detecção da palavra PIX, similar ao áudio
+            const tituloFixo = "Copie nossa chave PIX abaixo e nos envie o comprovante, por favor.";
 
             historico.push(idMsg);
             salvarHistoricoRespondidos(historico);
 
-            console.log(`✅ Palavra PIX detectada. Respondendo mensagem com ID: ${idMsg}`);
+            console.log(`✅ Palavra PIX detectada. Enviando título e mensagem PIX.`);
 
             try {
+                await enviarMensagem(tituloFixo);
+                await new Promise(resolve => setTimeout(resolve, 500)); // Pequeno delay entre as mensagens
                 await enviarMensagem(mensagemResposta);
             } catch (e) {
                 console.error("Erro no envio da auto-resposta PIX:", e);
