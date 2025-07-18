@@ -19,8 +19,8 @@
         prefix: 'wa_mv_final_',
         selectors: {
             app: '#app',
-            chatBox: 'div[contenteditable="true"][data-tab="10"]',
-            sendButton: '[data-testid="send"], [aria-label="Enviar"]'
+            chatBox: 'div[contenteditable="true"][data-tab="10"], div[contenteditable="true"][data-tab="1"], div[contenteditable="true"][role="textbox"], div[contenteditable="true"][data-lexical-editor="true"]',
+            sendButton: '[data-testid="send"], [aria-label="Enviar"], [aria-label="Send"], button[aria-label*="Enviar"], button[data-testid*="send"]'
         },
         containerId: 'mv-automation-container',
         maxImages: 5,
@@ -106,6 +106,8 @@
                     soundEnabled: true,
                     animationsEnabled: true,
                     audioAutoReply: false, // NOVO: Configuração para auto-resposta de áudio
+                    pixAutoReply: false, // NOVO: Configuração para auto-resposta PIX
+                    pixAutoReplyMessage: 'Olá! Para pagamentos via PIX, utilize nossa chave: pix@exemplo.com 💳', // NOVO: Mensagem PIX
                     tagSystemEnabled: false, // NOVO: Configuração para sistema de tags
                     autoBackupEnabled: false, // NOVO: Configuração para backup automático
                     autoBackupInterval: '01:00:00' // NOVO: Intervalo de backup automático (HH:MM:SS)
@@ -213,19 +215,45 @@
     // 4. MÓDULO DE AÇÕES NO WHATSAPP
     // =================================================================================
     const WhatsAppActions = {
-        waitForElement: (selector, timeout = 10000) => new Promise((resolve, reject) => {
-            const el = document.querySelector(selector);
-            if (el) return resolve(el);
-            const observer = new MutationObserver(() => {
-                const el = document.querySelector(selector);
-                if (el) { observer.disconnect(); resolve(el); }
+        waitForElement: (selector, timeout = 10000) => {
+            return new Promise((resolve, reject) => {
+                // Tenta múltiplos seletores se fornecido como string com vírgulas
+                const selectors = selector.split(',').map(s => s.trim());
+
+                // Primeiro, tenta encontrar o elemento imediatamente
+                for (const sel of selectors) {
+                    const element = document.querySelector(sel);
+                    if (element) {
+                        resolve(element);
+                        return;
+                    }
+                }
+
+                // Se não encontrou, usa MutationObserver
+                const observer = new MutationObserver(() => {
+                    for (const sel of selectors) {
+                        const element = document.querySelector(sel);
+                        if (element) {
+                            observer.disconnect();
+                            resolve(element);
+                            return;
+                        }
+                    }
+                });
+
+                observer.observe(document.body, {
+                    childList: true,
+                    subtree: true,
+                    attributes: true,
+                    attributeFilter: ['data-testid', 'aria-label']
+                });
+
+                setTimeout(() => {
+                    observer.disconnect();
+                    reject(new Error(`Elemento não encontrado: ${selector}`));
+                }, timeout);
             });
-            observer.observe(document.body, { childList: true, subtree: true });
-            setTimeout(() => {
-                observer.disconnect();
-                reject(new Error(`Elemento "${selector}" não encontrado.`));
-            }, timeout);
-        }),
+        },
 
         playSound: () => {
             const settings = DataManager.loadAll();
@@ -490,7 +518,119 @@
     })();
 
     // =================================================================================
-    // 6. MÓDULO DE BACKUP AUTOMÁTICO
+    // 6. MÓDULO DE AUTO-RESPOSTA PIX
+    // =================================================================================
+    const PixAutoReply = (() => {
+        const RESPONDIDOS_PIX_KEY = "msgs_pix_respondidas_ids";
+        let bloqueioEnvioGlobal = false;
+        let debounceTimeout;
+        let pixCheckInterval;
+
+        function getHistoricoRespondidos() {
+            const raw = localStorage.getItem(RESPONDIDOS_PIX_KEY);
+            return raw ? JSON.parse(raw) : [];
+        }
+
+        function salvarHistoricoRespondidos(lista) {
+            localStorage.setItem(RESPONDIDOS_PIX_KEY, JSON.stringify(lista.slice(-500)));
+        }
+
+        function gerarIdUnico(msgElement) {
+            const texto = msgElement.innerText || "";
+            const timestamp = msgElement.querySelector("span[data-pre-plain-text]")?.getAttribute("data-pre-plain-text") || "";
+            return btoa(texto + timestamp);
+        }
+
+        function containsPixKeyword(text) {
+            const pixKeywords = ['pix', 'PIX', 'Pix'];
+            return pixKeywords.some(keyword => text.includes(keyword));
+        }
+
+        function mensagemJaEnviada(texto) {
+            const mensagensEnviadas = Array.from(document.querySelectorAll('div.message-out span.selectable-text'));
+            return mensagensEnviadas.some(span => span.innerText === texto);
+        }
+
+        async function enviarMensagem(texto) {
+            if (bloqueioEnvioGlobal) throw new Error("Envio bloqueado");
+
+            bloqueioEnvioGlobal = true;
+
+            try {
+                const success = await WhatsAppActions.sendText(texto);
+                if (!success) {
+                    throw new Error("Falha ao enviar mensagem");
+                }
+            } finally {
+                setTimeout(() => {
+                    bloqueioEnvioGlobal = false;
+                }, 2000);
+            }
+        }
+
+        async function verificarUltimaMensagem() {
+            const settings = DataManager.loadAll();
+            if (!settings.general.pixAutoReply) return;
+
+            if (bloqueioEnvioGlobal) return;
+            if (debounceTimeout) return;
+
+            debounceTimeout = setTimeout(() => {
+                debounceTimeout = null;
+            }, 1500);
+
+            const mensagensRecebidas = Array.from(document.querySelectorAll("div.message-in"));
+            if (mensagensRecebidas.length === 0) return;
+
+            const ultimaMsg = mensagensRecebidas[mensagensRecebidas.length - 1];
+            if (!ultimaMsg) return;
+
+            const textoMsg = ultimaMsg.innerText || "";
+            if (!containsPixKeyword(textoMsg)) return;
+
+            const idMsg = gerarIdUnico(ultimaMsg);
+            if (!idMsg) return;
+
+            const historico = getHistoricoRespondidos();
+            if (historico.includes(idMsg)) return;
+
+            const mensagemResposta = settings.general.pixAutoReplyMessage;
+
+            // REMOVIDO: Verificação se mensagem já foi enviada
+            // Agora responde a cada detecção da palavra PIX, similar ao áudio
+
+            historico.push(idMsg);
+            salvarHistoricoRespondidos(historico);
+
+            console.log(`✅ Palavra PIX detectada. Respondendo mensagem com ID: ${idMsg}`);
+
+            try {
+                await enviarMensagem(mensagemResposta);
+            } catch (e) {
+                console.error("Erro no envio da auto-resposta PIX:", e);
+            }
+        }
+
+        return {
+            start: () => {
+                if (!pixCheckInterval) {
+                    pixCheckInterval = setInterval(verificarUltimaMensagem, 2000);
+                    console.log('[WA MV] Auto-resposta PIX iniciada.');
+                }
+            },
+            stop: () => {
+                if (pixCheckInterval) {
+                    clearInterval(pixCheckInterval);
+                    pixCheckInterval = null;
+                    console.log('[WA MV] Auto-resposta PIX parada.');
+                }
+            },
+            checkStatus: () => !!pixCheckInterval
+        };
+    })();
+
+    // =================================================================================
+    // 7. MÓDULO DE BACKUP AUTOMÁTICO
     // =================================================================================
     const AutoBackupManager = (() => {
         let backupInterval = null;
@@ -1153,6 +1293,58 @@
                     margin-bottom: 1.5rem;
                 }
 
+                .mv-grid-layout {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                    gap: 1.5rem;
+                    margin-bottom: 1rem;
+                }
+
+                .mv-grid-card {
+                    background: ${theme.surface};
+                    border-radius: 12px;
+                    padding: 1.5rem;
+                    border: 1px solid ${UIManager.lightenColor(theme.surface, 10)};
+                    transition: all 0.3s ease;
+                }
+
+                .mv-grid-card:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+                }
+
+                .mv-grid-card-full-width {
+                    grid-column: 1 / -1;
+                }
+
+                .mv-card-header {
+                    font-size: 1.1rem;
+                    font-weight: 700;
+                    color: ${theme.accent};
+                    margin-bottom: 1rem;
+                    padding-bottom: 0.5rem;
+                    border-bottom: 2px solid ${theme.accent};
+                }
+
+                .mv-card-body {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1rem;
+                }
+
+                .mv-form-group-grid {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 0.5rem 0;
+                }
+
+                .mv-form-group-grid label:first-child {
+                    font-weight: 500;
+                    color: #e9edef;
+                    margin-bottom: 0;
+                }
+
                 .mv-form-group label {
                     display: block;
                     font-weight: 600;
@@ -1524,64 +1716,74 @@
                         </div>
 
                         <div id="tab-general" class="mv-tab-content active">
-                            <h4>⚙️ Configurações Gerais</h4>
-                            <div class="mv-form-group" style="display: flex; align-items: center; gap: 15px;">
-                                <label for="mv-auto-hide-toggle" style="margin-bottom: 0;">Desaparecer botões automaticamente</label>
-                                <label class="mv-switch">
-                                    <input type="checkbox" id="mv-auto-hide-toggle">
-                                    <span class="mv-slider"></span>
-                                </label>
-                            </div>
-                            <div class="mv-form-group">
-                                <label for="mv-auto-hide-duration">Duração da visibilidade (segundos)</label>
-                                <input type="number" id="mv-auto-hide-duration" min="1" max="60">
-                            </div>
-                            <div class="mv-form-group">
-                                <label for="mv-wait-time-position">Posição dos botões de tempo</label>
-                                <select id="mv-wait-time-position">
-                                    <option value="top">No topo da lista</option>
-                                    <option value="bottom">Na base da lista</option>
-                                </select>
-                            </div>
-                            <div class="mv-form-group" style="display: flex; align-items: center; gap: 15px;">
-                                <label for="mv-sound-toggle" style="margin-bottom: 0;">Som de notificação</label>
-                                <label class="mv-switch">
-                                    <input type="checkbox" id="mv-sound-toggle">
-                                    <span class="mv-slider"></span>
-                                </label>
-                            </div>
-                            <div class="mv-form-group" style="display: flex; align-items: center; gap: 15px;">
-                                <label for="mv-animations-toggle" style="margin-bottom: 0;">Animações</label>
-                                <label class="mv-switch">
-                                    <input type="checkbox" id="mv-animations-toggle">
-                                    <span class="mv-slider"></span>
-                                </label>
-                            </div>
-                            <div class="mv-form-group" style="display: flex; align-items: center; gap: 15px;">
-                                <label for="mv-audio-auto-reply-toggle" style="margin-bottom: 0;">Auto-resposta de áudio</label>
-                                <label class="mv-switch">
-                                    <input type="checkbox" id="mv-audio-auto-reply-toggle">
-                                    <span class="mv-slider"></span>
-                                </label>
-                            </div>
-                            <div class="mv-form-group" style="display: flex; align-items: center; gap: 15px;">
-                                <label for="mv-tag-system-toggle" style="margin-bottom: 0;">Ativar Tag</label>
-                                <label class="mv-switch">
-                                    <input type="checkbox" id="mv-tag-system-toggle">
-                                    <span class="mv-slider"></span>
-                                </label>
-                            </div>
-                            <div class="mv-form-group" style="display: flex; align-items: center; gap: 15px;">
-                                <label for="mv-auto-backup-toggle" style="margin-bottom: 0;">Backup automático</label>
-                                <label class="mv-switch">
-                                    <input type="checkbox" id="mv-auto-backup-toggle">
-                                    <span class="mv-slider"></span>
-                                </label>
-                            </div>
-                            <div class="mv-form-group">
-                                <label for="mv-auto-backup-interval">Intervalo do backup (HH:MM:SS)</label>
-                                <input type="text" id="mv-auto-backup-interval" placeholder="01:00:00" pattern="[0-9]{2}:[0-9]{2}:[0-9]{2}">
-                                <small style="color: #8696a0; margin-top: 5px; display: block;">Formato: Horas:Minutos:Segundos (ex: 01:30:00 para 1h30min)</small>
+                            <div class="mv-grid-layout">
+                                <!-- Card: Ativação de Módulos -->
+                                <div class="mv-grid-card">
+                                    <div class="mv-card-header">Ativação de Módulos</div>
+                                    <div class="mv-card-body">
+                                        <div class="mv-form-group-grid">
+                                            <label for="mv-audio-auto-reply-toggle">Auto-resposta de Áudio</label>
+                                            <label class="mv-switch"><input type="checkbox" id="mv-audio-auto-reply-toggle"><span class="mv-slider"></span></label>
+                                        </div>
+                                        <div class="mv-form-group-grid">
+                                            <label for="mv-pix-auto-reply-toggle">Auto-resposta PIX</label>
+                                            <label class="mv-switch"><input type="checkbox" id="mv-pix-auto-reply-toggle"><span class="mv-slider"></span></label>
+                                        </div>
+                                        <div class="mv-form-group-grid">
+                                            <label for="mv-tag-system-toggle">Sistema de Tags</label>
+                                            <label class="mv-switch"><input type="checkbox" id="mv-tag-system-toggle"><span class="mv-slider"></span></label>
+                                        </div>
+                                        <div class="mv-form-group-grid">
+                                            <label for="mv-auto-backup-toggle">Backup Automático</label>
+                                            <label class="mv-switch"><input type="checkbox" id="mv-auto-backup-toggle"><span class="mv-slider"></span></label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Card: Comportamento -->
+                                <div class="mv-grid-card">
+                                    <div class="mv-card-header">Comportamento</div>
+                                    <div class="mv-card-body">
+                                        <div class="mv-form-group-grid">
+                                            <label for="mv-auto-hide-toggle">Ocultar Botões Automaticamente</label>
+                                            <label class="mv-switch"><input type="checkbox" id="mv-auto-hide-toggle"><span class="mv-slider"></span></label>
+                                        </div>
+                                        <div class="mv-form-group-grid">
+                                            <label for="mv-sound-toggle">Som ao Enviar</label>
+                                            <label class="mv-switch"><input type="checkbox" id="mv-sound-toggle"><span class="mv-slider"></span></label>
+                                        </div>
+                                        <div class="mv-form-group-grid">
+                                            <label for="mv-animations-toggle">Animações da Interface</label>
+                                            <label class="mv-switch"><input type="checkbox" id="mv-animations-toggle"><span class="mv-slider"></span></label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Card: Configurações Detalhadas -->
+                                <div class="mv-grid-card mv-grid-card-full-width">
+                                    <div class="mv-card-header">Configurações Detalhadas</div>
+                                    <div class="mv-card-body">
+                                        <div class="mv-form-group">
+                                            <label for="mv-pix-auto-reply-message">Mensagem para Auto-resposta PIX</label>
+                                            <textarea id="mv-pix-auto-reply-message" rows="2" placeholder="Ex: Olá! Para pagamentos via PIX, utilize a chave: email@exemplo.com"></textarea>
+                                        </div>
+                                        <div class="mv-form-group">
+                                            <label for="mv-auto-hide-duration">Duração da Visibilidade dos Botões (segundos)</label>
+                                            <input type="number" id="mv-auto-hide-duration" min="1" max="60">
+                                        </div>
+                                        <div class="mv-form-group">
+                                            <label for="mv-wait-time-position">Posição dos Botões de Tempo</label>
+                                            <select id="mv-wait-time-position">
+                                                <option value="top">No topo da lista</option>
+                                                <option value="bottom">Na base da lista</option>
+                                            </select>
+                                        </div>
+                                        <div class="mv-form-group">
+                                            <label for="mv-auto-backup-interval">Intervalo do Backup Automático (HH:MM:SS)</label>
+                                            <input type="text" id="mv-auto-backup-interval" placeholder="01:00:00" pattern="[0-9]{2}:[0-9]{2}:[0-9]{2}">
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -1934,6 +2136,8 @@
             document.getElementById('mv-sound-toggle').checked = general.soundEnabled;
             document.getElementById('mv-animations-toggle').checked = general.animationsEnabled;
             document.getElementById('mv-audio-auto-reply-toggle').checked = general.audioAutoReply; // Estado do toggle de áudio
+            document.getElementById('mv-pix-auto-reply-toggle').checked = general.pixAutoReply; // Estado do toggle PIX
+            document.getElementById('mv-pix-auto-reply-message').value = general.pixAutoReplyMessage; // Mensagem PIX
             document.getElementById('mv-tag-system-toggle').checked = general.tagSystemEnabled; // NOVO: Estado do toggle de tags
             document.getElementById('mv-auto-backup-toggle').checked = general.autoBackupEnabled; // NOVO: Estado do toggle de backup
             document.getElementById('mv-auto-backup-interval').value = general.autoBackupInterval; // NOVO: Intervalo de backup
@@ -2236,6 +2440,8 @@
             UIManager.state.settings.general.soundEnabled = document.getElementById('mv-sound-toggle').checked;
             UIManager.state.settings.general.animationsEnabled = document.getElementById('mv-animations-toggle').checked;
             UIManager.state.settings.general.audioAutoReply = document.getElementById('mv-audio-auto-reply-toggle').checked; // Salva estado do toggle de áudio
+            UIManager.state.settings.general.pixAutoReply = document.getElementById('mv-pix-auto-reply-toggle').checked; // Salva estado do toggle PIX
+            UIManager.state.settings.general.pixAutoReplyMessage = document.getElementById('mv-pix-auto-reply-message').value; // Salva mensagem PIX
             UIManager.state.settings.general.tagSystemEnabled = document.getElementById('mv-tag-system-toggle').checked; // NOVO: Salva estado do toggle de tags
             UIManager.state.settings.general.autoBackupEnabled = document.getElementById('mv-auto-backup-toggle').checked; // NOVO: Salva estado do toggle de backup
             UIManager.state.settings.general.autoBackupInterval = document.getElementById('mv-auto-backup-interval').value; // NOVO: Salva intervalo de backup
@@ -2245,6 +2451,13 @@
             } else {
                 AudioAutoReply.stop();
             }
+
+            if (UIManager.state.settings.general.pixAutoReply) {
+                PixAutoReply.start();
+            } else {
+                PixAutoReply.stop();
+            }
+
             UIManager.updateAudioStatusIcon(); // Atualiza o ícone imediatamente
 
             if (UIManager.state.settings.general.tagSystemEnabled) {
@@ -2398,6 +2611,20 @@
             });
 
             document.getElementById('mv-wait-edit-cancel').addEventListener('click', UIManager.hideEditModal);
+
+            // Event listeners para configurações PIX
+            document.getElementById('mv-pix-auto-reply-toggle').addEventListener('change', (e) => {
+                UIManager.state.settings.general.pixAutoReply = e.target.checked;
+                if (e.target.checked) {
+                    PixAutoReply.start();
+                } else {
+                    PixAutoReply.stop();
+                }
+            });
+
+            document.getElementById('mv-pix-auto-reply-message').addEventListener('input', (e) => {
+                UIManager.state.settings.general.pixAutoReplyMessage = e.target.value;
+            });
 
             document.getElementById('mv-quick-edit-save').addEventListener('click', () => {
                 const index = document.getElementById('mv-quick-edit-id').value;
@@ -2614,14 +2841,17 @@
             this.renderFloatingButtons();
             this.initEventListeners();
             this.updateAudioStatusIcon(); // Inicializa o ícone de status do áudio
-
-            // Inicia a auto-resposta de áudio se estiver ativada nas configurações
-            if (this.state.settings.general.audioAutoReply) {
+            // Inicia a auto-resposta de áudio se habilitada
+            if (UIManager.state.settings.general.audioAutoReply) {
                 AudioAutoReply.start();
             }
 
-            // Inicia o sistema de tags se estiver ativado nas configurações
-            if (this.state.settings.general.tagSystemEnabled) {
+            // Inicia a auto-resposta PIX se habilitada
+            if (UIManager.state.settings.general.pixAutoReply) {
+                PixAutoReply.start();
+            }
+
+            if (UIManager.state.settings.general.tagSystemEnabled) {
                 TagManager.start();
             }
 
