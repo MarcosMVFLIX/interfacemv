@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Aviso Fixo WhatsApp Web com Botão de Contato
 // @namespace    http://tampermonkey.net/
-// @version      1.1
+// @version      1.2
 // @description  Exibe aviso fixo no topo da tela com botão para contato via WhatsApp
 // @author       Marcos
 // @match        https://web.whatsapp.com/
