@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WhatsApp Automation MV (v5.4 - Áudio Integrado)
 // @namespace    http://tampermonkey.net/
-// @version      7.0
+// @version      7.0.1
 // @description  Versão com personalização de posição e tamanho dos botões flutuantes e integração de áudio.
 // @author       Manus AI Assistant & [Seu Nome]
 // @match        https://web.whatsapp.com/*
