@@ -36,7 +36,7 @@
     aviso.style.flexWrap = "wrap";
 
     const texto = document.createElement("span");
-    texto.textContent = "⚠️ O sistema será desativado. Entre em contato com o desenvolvedor: Marcos";
+    texto.textContent = "⚠️ O sistema será desativado a qualquer momento. Entre em contato com o desenvolvedor: Marcos (MV ELETRÔNICOS)";
 
     const botao = document.createElement("button");
     botao.textContent = "Entrar em contato";
