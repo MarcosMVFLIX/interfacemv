@@ -2888,25 +2888,51 @@
             }
         }
     };
-function mostrarAvisoFixo() {
-  const avisoExistente = document.getElementById("aviso-fixo-topo");
-  if (avisoExistente) return; // Evita adicionar múltiplas vezes
+function inserirAvisoComBotaoContato() {
+  if (document.getElementById("aviso-fixo-topo")) return;
 
-  const aviso = document.createElement("img");
+  const aviso = document.createElement("div");
   aviso.id = "aviso-fixo-topo";
-  aviso.src = "https://via.placeholder.com/1200x80/FF0000/FFFFFF?text=Sistema+será+desativado.+Contato:+31996707795"; // Substitua pela sua imagem
   aviso.style.position = "fixed";
   aviso.style.top = "0";
-  aviso.style.left = "50%";
-  aviso.style.transform = "translateX(-50%)";
-  aviso.style.zIndex = "999999";
+  aviso.style.left = "0";
   aviso.style.width = "100%";
-  aviso.style.maxWidth = "1200px";
-  aviso.style.boxShadow = "0 2px 10px rgba(0, 0, 0, 0.3)";
-  aviso.style.pointerEvents = "none"; // Não bloqueia cliques na página
+  aviso.style.backgroundColor = "#c62828";
+  aviso.style.color = "#fff";
+  aviso.style.fontSize = "16px";
+  aviso.style.fontWeight = "bold";
+  aviso.style.textAlign = "center";
+  aviso.style.padding = "10px";
+  aviso.style.zIndex = "999999";
+  aviso.style.boxShadow = "0 2px 6px rgba(0,0,0,0.3)";
+  aviso.style.fontFamily = "Arial, sans-serif";
+  aviso.style.display = "flex";
+  aviso.style.justifyContent = "center";
+  aviso.style.alignItems = "center";
+  aviso.style.gap = "10px";
+  aviso.style.flexWrap = "wrap";
 
+  const texto = document.createElement("span");
+  texto.textContent = "⚠️ O sistema será desativado. Entre em contato com o desenvolvedor: Marcos";
+
+  const botao = document.createElement("button");
+  botao.textContent = "Entrar em contato";
+  botao.style.backgroundColor = "#fff";
+  botao.style.color = "#c62828";
+  botao.style.border = "none";
+  botao.style.padding = "5px 12px";
+  botao.style.borderRadius = "5px";
+  botao.style.cursor = "pointer";
+  botao.style.fontWeight = "bold";
+  botao.onclick = () => {
+    window.open("https://wa.me/5531996707795", "_blank");
+  };
+
+  aviso.appendChild(texto);
+  aviso.appendChild(botao);
   document.body.appendChild(aviso);
 }
+
 
 
     // =================================================================================
