@@ -1725,7 +1725,7 @@
                 <div id="mv-modal-backdrop" class="mv-modal-backdrop"></div>
                 <div id="mv-modal" class="mv-modal">
                     <div class="mv-modal-header">
-                        <h3>⚙️ NOVO MENU (em desenvolvimento) MV ELETRONICOS - TECNOLOGIAS</h3>
+                        <h3>⚙️ NOVO MENU MV ELETRONICOS - TECNOLOGIAS</h3>
                     </div>
                     <div class="mv-modal-body">
                         <div class="mv-tab-container">
