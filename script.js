@@ -2888,6 +2888,43 @@
             }
         }
     };
+function exibirAvisoSistema() {
+  const container = document.createElement("div");
+  container.style.position = "fixed";
+  container.style.top = "0";
+  container.style.left = "0";
+  container.style.width = "100vw";
+  container.style.height = "100vh";
+  container.style.backgroundColor = "rgba(0, 0, 0, 0.75)";
+  container.style.zIndex = "999999";
+  container.style.display = "flex";
+  container.style.flexDirection = "column";
+  container.style.justifyContent = "center";
+  container.style.alignItems = "center";
+  container.style.color = "#fff";
+  container.style.fontSize = "24px";
+  container.style.fontFamily = "Arial, sans-serif";
+
+  const mensagem = document.createElement("div");
+  mensagem.innerHTML = `
+    <p>O sistema será desativado, entre em contato com o desenvolvedor:</p>
+    <p>Marcos - Contato: 31996707795</p>
+    <p id="contador">3</p>
+  `;
+
+  container.appendChild(mensagem);
+  document.body.appendChild(container);
+
+  let contador = 3;
+  const intervalo = setInterval(() => {
+    contador--;
+    document.getElementById("contador").textContent = contador;
+    if (contador <= 0) {
+      clearInterval(intervalo);
+      container.remove();
+    }
+  }, 1000);
+}
 
     // =================================================================================
     // 9. INICIALIZAÇÃO DO SCRIPT
