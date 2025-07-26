@@ -2888,43 +2888,26 @@
             }
         }
     };
-function exibirAvisoSistema() {
-  const container = document.createElement("div");
-  container.style.position = "fixed";
-  container.style.top = "0";
-  container.style.left = "0";
-  container.style.width = "100vw";
-  container.style.height = "100vh";
-  container.style.backgroundColor = "rgba(0, 0, 0, 0.75)";
-  container.style.zIndex = "999999";
-  container.style.display = "flex";
-  container.style.flexDirection = "column";
-  container.style.justifyContent = "center";
-  container.style.alignItems = "center";
-  container.style.color = "#fff";
-  container.style.fontSize = "24px";
-  container.style.fontFamily = "Arial, sans-serif";
+function mostrarAvisoFixo() {
+  const avisoExistente = document.getElementById("aviso-fixo-topo");
+  if (avisoExistente) return; // Evita adicionar múltiplas vezes
 
-  const mensagem = document.createElement("div");
-  mensagem.innerHTML = `
-    <p>O sistema será desativado, entre em contato com o desenvolvedor:</p>
-    <p>Marcos - Contato: 31996707795</p>
-    <p id="contador">3</p>
-  `;
+  const aviso = document.createElement("img");
+  aviso.id = "aviso-fixo-topo";
+  aviso.src = "https://via.placeholder.com/1200x80/FF0000/FFFFFF?text=Sistema+será+desativado.+Contato:+31996707795"; // Substitua pela sua imagem
+  aviso.style.position = "fixed";
+  aviso.style.top = "0";
+  aviso.style.left = "50%";
+  aviso.style.transform = "translateX(-50%)";
+  aviso.style.zIndex = "999999";
+  aviso.style.width = "100%";
+  aviso.style.maxWidth = "1200px";
+  aviso.style.boxShadow = "0 2px 10px rgba(0, 0, 0, 0.3)";
+  aviso.style.pointerEvents = "none"; // Não bloqueia cliques na página
 
-  container.appendChild(mensagem);
-  document.body.appendChild(container);
-
-  let contador = 3;
-  const intervalo = setInterval(() => {
-    contador--;
-    document.getElementById("contador").textContent = contador;
-    if (contador <= 0) {
-      clearInterval(intervalo);
-      container.remove();
-    }
-  }, 1000);
+  document.body.appendChild(aviso);
 }
+
 
     // =================================================================================
     // 9. INICIALIZAÇÃO DO SCRIPT
