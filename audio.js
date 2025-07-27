@@ -1,14 +1,14 @@
 // ==UserScript==
-// @name         Aviso Fixo WhatsApp Web com Botão de Contato
+// @name         Aviso Fixo WhatsApp Web com Botão de Contato e Contador
 // @namespace    http://tampermonkey.net/
-// @version      1.2
-// @description  Exibe aviso fixo no topo da tela com botão para contato via WhatsApp
+// @version      1.3
+// @description  Exibe aviso fixo no topo da tela com botão para contato via WhatsApp e contador de 20s
 // @author       Marcos
 // @match        https://web.whatsapp.com/
 // @grant        none
 // ==/UserScript==
 
-(function() {
+(function () {
   'use strict';
 
   function mostrarAvisoFixo() {
@@ -38,6 +38,27 @@
     const texto = document.createElement("span");
     texto.textContent = "⚠️ O sistema será desativado a qualquer momento. Entre em contato com o desenvolvedor: Marcos (MV ELETRÔNICOS)";
 
+    const contador = document.createElement("span");
+    contador.id = "contador-aviso";
+    contador.style.marginLeft = "10px";
+    contador.style.fontWeight = "bold";
+    contador.style.backgroundColor = "#fff";
+    contador.style.color = "#c62828";
+    contador.style.padding = "3px 8px";
+    contador.style.borderRadius = "4px";
+
+    let tempoRestante = 20;
+    contador.textContent = `(${tempoRestante}s)`;
+
+    const interval = setInterval(() => {
+      tempoRestante--;
+      contador.textContent = `(${tempoRestante}s)`;
+      if (tempoRestante <= 0) {
+        clearInterval(interval);
+        aviso.remove();
+      }
+    }, 1000);
+
     const botao = document.createElement("button");
     botao.textContent = "Entrar em contato";
     botao.style.backgroundColor = "#fff";
@@ -52,6 +73,7 @@
     };
 
     aviso.appendChild(texto);
+    aviso.appendChild(contador);
     aviso.appendChild(botao);
     document.body.appendChild(aviso);
   }
@@ -59,5 +81,4 @@
   window.addEventListener('load', () => {
     setTimeout(mostrarAvisoFixo, 3000);
   });
-
 })();
