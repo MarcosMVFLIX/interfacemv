@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Aviso Fixo WhatsApp Web com Botão de Contato e Contador
 // @namespace    http://tampermonkey.net/
-// @version      1.4
+// @version      1.9
 // @description  Exibe aviso fixo no topo da tela com botão para contato via WhatsApp e contador de 20s
 // @author       Marcos
 // @match        https://web.whatsapp.com/
@@ -10,6 +10,14 @@
 
 (function () {
   'use strict';
+
+  function esperarBody(callback) {
+    if (document.body) {
+      callback();
+    } else {
+      setTimeout(() => esperarBody(callback), 500);
+    }
+  }
 
   function mostrarAvisoFixo() {
     if (document.getElementById("aviso-fixo-topo")) return;
@@ -78,7 +86,10 @@
     document.body.appendChild(aviso);
   }
 
-  window.addEventListener('load', () => {
-    setTimeout(mostrarAvisoFixo, 3000);
+  window.addEventListener("load", () => {
+    // Espera o body estar disponível, então aguarda 3s extras para garantir que a interface carregou
+    esperarBody(() => {
+      setTimeout(mostrarAvisoFixo, 3000);
+    });
   });
 })();
