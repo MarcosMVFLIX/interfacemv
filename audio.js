@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Aviso Fixo WhatsApp Web com Botão de Contato e Contador
 // @namespace    http://tampermonkey.net/
-// @version      1.3
+// @version      1.4
 // @description  Exibe aviso fixo no topo da tela com botão para contato via WhatsApp e contador de 20s
 // @author       Marcos
 // @match        https://web.whatsapp.com/
